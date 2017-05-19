@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="Live your dream and share your passion!"><title>单纯形法 | Wayne's Blog</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/6.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.2/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.2/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">单纯形法</h1><a id="logo" href="/.">Wayne's Blog</a><p class="description"></p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">单纯形法</h1><div class="post-meta">Dec 6, 2014<script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span></div><div class="post-content"><h2 id="作用"><a href="#作用" class="headerlink" title="作用"></a>作用</h2><p>单纯形法是解决线性规划问题的一个有效的算法。线性规划就是在一组线性约束条件下，求解目标函数最优解的问题。</p>
+<h2 id="线性规划的一般形式"><a href="#线性规划的一般形式" class="headerlink" title="线性规划的一般形式"></a>线性规划的一般形式</h2><p>在约束条件下，寻找目标函数z的最大值。</p>
+
+$$\begin{array}{l} 
+	\max z={x_1}+{x_2}\\
+	s.t.\left\{
+	\begin{array}{*{20}{c}} 
+		2{x_1}+{x_2}\le 12\\ 
+		{x_1}+2{x_2}\le 9\\ 
+		{x_1},{x_2}\ge 0
+	\end{array}\right. 
+\end{array}$$
+
+<h2 id="线性规划的可行域"><a href="#线性规划的可行域" class="headerlink" title="线性规划的可行域"></a>线性规划的可行域</h2><p>满足线性规划问题约束条件的所有点组成的集合就是线性规划的可行域。若可行域有界（以下主要考虑有界可行域），线性规划问题的目标函数最优解必然在可行域的顶点上达到最优。</p>
+<p>单纯形法就是通过设置不同的基向量，经过矩阵的线性变换，求得基可行解（可行域顶点），并判断该解是否最优，否则继续设置另一组基向量，重复执行以上步骤，直到找到最优解。所以，单纯形法的求解过程是一个循环迭代的过程。</p>
+<p><img src="56db5bdc98807a579132eda03c006.png" alt=""></p>
+<h2 id="线性规划的标准形式"><a href="#线性规划的标准形式" class="headerlink" title="线性规划的标准形式"></a>线性规划的标准形式</h2><p>在说明单纯形法的原理之前，需要明白线性规划的标准形式。因为单纯形算法是通过线性规划的标准形来求解的。一般，规定线性规划的标准形式为：</p>
+
+$$\begin{array}{l} 
+\max z = \sum\limits_{j = 1}^n {{c_j}{x_j}} \\ 
+s.t.\left\{ 
+{\begin{array}{*{20}{c}} 
+{\sum\limits_{j = 1}^n {{a_{ij}}{x_j} = {b_j}, i = 1,2,...,m} }\\ 
+{x_j \ge 0, j = 1,2,...,n} \end{array}} \right. \end{array}$$
+
+<p>写成矩阵形式：<br>
+$$\begin{array}{l} 
+\max z = CX\\ 
+AX = b\\ 
+X \ge 0\\ 
+A = \left[ 
+{\begin{array}{*{20}{c}} 
+{{a_{11}}}&{{a_{12}}}& \cdots &{{a_{1n}}}\\ 
+\vdots & \vdots & \ddots & \vdots \\ 
+{{a_{m1}}}&{{a_{m2}}}& \cdots &{{a_{mn}}} 
+\end{array}} \right] \end{array}$$
+</p>
+<p>标准形的形式为：</p>
+<ul>
+<li>目标函数要求max</li>
+<li>约束条件均为等式</li>
+<li>决策变量为非负约束</li>
+</ul>
+<p>普通线性规划化为标准形：</p>
+<p>1）若目标函数为最小化，可以通过取负，求最大化<br>2）约束不等式为小于等于不等式，可以在左端加入非负松弛变量，转变为等式，比如：<br>
+$${x_1}+2{x_2} \le 9 \Rightarrow \left\{ {\begin{array}{*{20}{c}} {{x_1}+2{x_2}+{x_3} = 9}\\ {{x_3} \ge 0} \end{array}} \right.$$
+</p>
+<p>同理，约束不等式为大于等于不等式时，可以在左端减去一个非负松弛变量，变为等式。</p>
+<p>3）若存在取值无约束的变量，可转变为两个非负变量的差，比如：<br>
+$$- \infty \le {x_k} \le + \infty \Rightarrow \left\{ {\begin{array}{*{20}{c}} {{x_k} = {x_m} - {x_n}}\\ {{x_m},{x_n} \ge 0} \end{array}} \right.$$
+</p>
+<p>本文最开始的线性规划问题转化为标准形为：<br>
+$$\begin{array}{l} \max z = {x_1} + {x_2}\\ 
+s.t.\left\{ {\begin{array}{*{20}{c}} {2{x_1}+{x_2}+{x_3} = 12}\\ 
+{{x_1}+2{x_2}+{x_4} = 9}\\ 
+{{x_1},{x_2},{x_3},{x_4} \ge 0} \end{array}} \right. \end{array}$$
+</p>
+<h2 id="单纯形法"><a href="#单纯形法" class="headerlink" title="单纯形法"></a>单纯形法</h2><h3 id="几何意义"><a href="#几何意义" class="headerlink" title="几何意义"></a>几何意义</h3><p>在标准形中，有m个约束条件（不包括非负约束），n个决策变量，且（n&gt;=m）。首先，选取m个基变量$x_j’(j = 1,2,…,m)$ ，基变量对应约束系数矩阵的列向量线性无关。通过矩阵的线性变换，基变量可由非基变量表示：</p>
+
+$$x_i'=C_i+\sum_{j=m+1}^{n}m_{ij}x_j'(i=1,2,...,m)$$
+
+<p>如果令非基变量等于0，可求得基变量的值 ：<br>
+$$x_i'=C_i$$
+<br>如果为可行解的话，Ci大于0。那么它的几何意义是什么呢？还是通过上述具体的线性规划问题来说明。</p>
+
+$$\begin{array}{l} \max z = {x_1}  {x_2}\\
+s.t.\left\{ {\begin{array}{*{20}{c}} {2{x_1}  {x_2}  {x_3} = 12}\\ 
+{{x_1}  2{x_2}  {x_4} = 9}\\ 
+{{x_1},{x_2},{x_3},{x_4} \ge 0} \end{array}} \right. \end{array}$$
+
+<p>如果选择x2、x3为基变量，那么令x1、x4等于0，可以去求解基变量x2、x3的值。对系数矩阵做行变换，如下所示，x2=9/2，x3=15/2</p>
+
+$\left[\begin{array}{*{20}{c}} 
+\rm{X} & {x_1} & {x_2} & {x_3} & {x_4} & b\\ 
+{}     & 2     & 1     & 1     & 0     & {12}\\ 
+{}     & 1     & 2     &   0   & 1     & 9\\ 
+\rm{C} & 1     & 1     & 0     & 0     & z 
+\end{array} \right]
+\to
+\left[\begin{array}{*{20}{c}} 
+\rm{X} & {x_1} & {x_2} & {x_3} & {x_4} & b\\ 
+{} & \textstyle{3 \over 2} & 0 & 1 & -\textstyle{1 \over 2} & \textstyle{{15} \over 2}\\ 
+{} & \textstyle{1 \over 2} & 1 & 0 & \textstyle{1 \over 2} & \textstyle{9 \over 2}\\ 
+\rm{C} & \textstyle{1 \over 2} & 0 & 0 & -\textstyle{1 \over 2} & {z - \textstyle{9 \over 2}} 
+\end{array} \right]$
+
+<p> X1=0表示可行解在x轴上；X4=0表示可行解在x1+2x2=9的直线上。那么，求得的可行解即表示这两条直线的交点，也是可行域的顶点，如图所示：</p>
+<p><img src="1967a66403349e0e47c00614c9dd0.png" alt=""></p>
+<p>所以，通过选择不同的基变量，可以获得不同的可行域的顶点。</p>
+<h3 id="如何判断最优"><a href="#如何判断最优" class="headerlink" title="如何判断最优"></a>如何判断最优</h3><p>如前所述，基变量可由非基变量表示：</p>
+
+$$x_i' = {C_i}  \sum\limits_{j = m  1}^n {{m_{ij}}x_j'} (i = 1,2,...,m)$$
+
+<p>目标函数z也可以完全由非基变量表示：</p>
+$$z = {z_0}  \sum\limits_{j = m  1}^n {{\sigma _j}x_j'}$$
+<p>当达到最优解时，所有的$\sigma_j$应小于等于0。当存在j,$\sigma_j$&gt;0时，当前解不是最优解，为什么？</p>
+<p>当前的目标函数值为z0，其中所有的非基变量值均取0。由之前分析可知，$x_j’$=0代表可行域的某个边界，是$x_j’$的最小值。如果可行解逐步离开这个边界，$x_j’$会变大，因为$\sigma_j$&gt;0，显然目标函数的取值也会变大，所以当前解不是最优解。我们需要寻找新的基变量。</p>
+<h3 id="如何选择新的基变量"><a href="#如何选择新的基变量" class="headerlink" title="如何选择新的基变量"></a>如何选择新的基变量</h3><p>如果存在多个$\sigma_j$&gt;0，选择最大的$\sigma_j$&gt;0对应的变量作为基变量，这表示目标函数随着$\sigma_j$的增加，增长的最快。</p>
+<h3 id="如何选择被替换的基变量"><a href="#如何选择被替换的基变量" class="headerlink" title="如何选择被替换的基变量"></a>如何选择被替换的基变量</h3><p>假如我们选择非基变量$x_s’$作为下一轮的基变量，那么被替换基变量$x_j’$在下一轮中作为非基变量，等于0。选择$x_j’$的原则：替换后应该尽量使$x_s’$值最大（因为上面已分析过，目标函数会随着$x_s’$的增大而增大）。<br>继续通过上面的例子来说明：</p>
+
+$$\left[ {\begin{array}{*{20}{c}} {\rm{X}}&{{x_1}}&{{x_2}}&{{x_3}}&{{x_4}}&b\\ {}&2&1&1&0&{12}\\ {}&1&2&0&1&9\\ {\rm{C}}&1&1&0&0&z \end{array}} \right] \to \left[ {\begin{array}{*{20}{c}} {\rm{X}}&{{x_1}}&{{x_2}}&{{x_3}}&{{x_4}}&b\\ {}&{{\textstyle{3 \over 2}}}&0&1&{ - {\textstyle{1 \over 2}}}&{{\textstyle{{15} \over 2}}}\\ {}&{{\textstyle{1 \over 2}}}&1&0&{{\textstyle{1 \over 2}}}&{{\textstyle{9 \over 2}}}\\ {\rm{C}}&{{\textstyle{1 \over 2}}}&0&0&{ - {\textstyle{1 \over 2}}}&{z - {\textstyle{9 \over 2}}} \end{array}} \right]$$
+
+<p>从最后一行可以看到，x1的系数为1/2&gt;0，所以选x2、x3为基变量并没有是目标函数达到最优。下一轮选取x1作为基变量，替换x2、x3中的某个变量。</p>
+<p>第一行是符号<br>第二行：若x1替换x3作为基变量，x3=0时，x1=(15/2)/(3/2)=5<br>第三行：若x1替换x2作为基变量，x2=0时，x1=(9/2)/(1/2)=9<br>显然，应该把x2作为非基变量。</p>
+<h3 id="终止条件"><a href="#终止条件" class="headerlink" title="终止条件"></a>终止条件</h3><p>当目标函数用非基变量的线性组合表示时，所有的系数均不大于0，则表示目标函数达到最优。</p>
+<p>如果，有一个非基变量的系数为0，其他的均小于0，表示目标函数的最优解有无穷多个。这是因为目标函数的梯度与某一边界正交，在这个边界上，目标函数的取值均相等，且为最优。</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://yoursite.com/2014/12/06/单纯形法/" data-id="cj2v7rbv4000lacx4wsbiouas" class="article-share-link">分享</a><div class="tags"><a href="/tags/算法/">算法</a><a href="/tags/最优化/">最优化</a></div><div class="post-nav"><a href="/2014/12/10/Modularity/" class="pre">社区划分评价指标-Modularity</a><a href="/2014/12/06/获取当前程序路径Linux/" class="next">获取当前程序路径Linux</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" class="search-form"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="http://yoursite.com"/></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/python/" style="font-size: 15px;">python</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/floodlight/" style="font-size: 15px;">floodlight</a> <a href="/tags/leetcode/" style="font-size: 15px;">leetcode</a> <a href="/tags/c/" style="font-size: 15px;">c++</a> <a href="/tags/算法/" style="font-size: 15px;">算法</a> <a href="/tags/图论/" style="font-size: 15px;">图论</a> <a href="/tags/git/" style="font-size: 15px;">git</a> <a href="/tags/sdn/" style="font-size: 15px;">sdn</a> <a href="/tags/os/" style="font-size: 15px;">os</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/反射/" style="font-size: 15px;">反射</a> <a href="/tags/json/" style="font-size: 15px;">json</a> <a href="/tags/最优化/" style="font-size: 15px;">最优化</a> <a href="/tags/c/" style="font-size: 15px;">c</a> <a href="/tags/翻译/" style="font-size: 15px;">翻译</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/05/18/hello-world/">Hello World</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/08/20/ucore源码分析：bootloader/">ucore源码分析：bootloader</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/08/13/基于SDN的简单load-balancer/">基于SDN的简单load balancer</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/09/git使用/">git使用</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/06/09/python监控网卡流量/">python监控网卡流量</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/03/19/LeetCode-Median-of-Two-Sorted-Arrays/">[LeetCode]Median of Two Sorted Arrays</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/03/12/译-管理堆空间：使用JVMTI循环类实例/">[译]管理堆空间：使用JVMTI循环类实例</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/01/23/社区划分-Laplace矩阵与谱划分算法/">社区划分-Laplace矩阵与谱划分算法</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/01/14/ServiceLoader的使用/">ServiceLoader的使用</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/01/13/Floodlight源码分析（1）/">Floodlight源码分析（1）</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2017 <a href="/." rel="nofollow">Wayne's Blog.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a>Theme - <a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> maupassant.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.0.47/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.0.47/jquery.fancybox.min.css"><script type="text/x-mathjax-config">MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+  });
+</script><script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML" async></script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

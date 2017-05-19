@@ -1,0 +1,1017 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Wayne&#39;s Blog</title>
+  
+  <link href="/atom.xml" rel="self"/>
+  
+  <link href="http://yoursite.com/"/>
+  <updated>2017-05-18T06:44:32.000Z</updated>
+  <id>http://yoursite.com/</id>
+  
+  <author>
+    <name>Wayne</name>
+    
+  </author>
+  
+  <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Hello World</title>
+    <link href="http://yoursite.com/2017/05/18/hello-world/"/>
+    <id>http://yoursite.com/2017/05/18/hello-world/</id>
+    <published>2017-05-18T14:01:49.981Z</published>
+    <updated>2017-05-18T06:44:32.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>Welcome to <a href="https://hexo.io/" target="_blank" rel="external">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="external">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="external">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="external">GitHub</a>.</p>
+<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo new <span class="string">"My New Post"</span></div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="external">Writing</a></p>
+<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo server</div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="external">Server</a></p>
+<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo generate</div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="external">Generating</a></p>
+<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo deploy</div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="external">Deployment</a></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;Welcome to &lt;a href=&quot;https://hexo.io/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;Hexo&lt;/a&gt;! This is your very first post. Check &lt;a href=&quot;https://hexo.
+    
+    </summary>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>ucore源码分析：bootloader</title>
+    <link href="http://yoursite.com/2015/08/20/ucore%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%EF%BC%9Abootloader/"/>
+    <id>http://yoursite.com/2015/08/20/ucore源码分析：bootloader/</id>
+    <published>2015-08-19T19:15:12.000Z</published>
+    <updated>2017-05-18T08:48:25.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="1-总述"><a href="#1-总述" class="headerlink" title="1 总述"></a>1 总述</h2><p>bootloader的程序存放在硬盘的第一个扇区（512B）。BIOS程序会将bootloader加载到内存0x7c00处，并跳转到这里执行。</p>
+<p>bootloader的主要作用：</p>
+<ol>
+<li>打开A20地址线，使CPU进入32位实模式；</li>
+<li>探测物理内存大小；</li>
+<li>设置CR0，进入32位保护模式；</li>
+<li>加载内核镜像，把控制权交给内核。</li>
+</ol>
+<h2 id="2-准备"><a href="#2-准备" class="headerlink" title="2 准备"></a>2 准备</h2><ol>
+<li><p>进入bootloader后，为了后向兼容，此时的CPU是16位模式（20根地址线，16位地址模式），20-31的地址线为0。此时的汇编代码应该有“.code16”前缀，表示16位模式。</p>
+</li>
+<li><p>在bootloader执行过程中，必须关闭中断，将数据段、附加段、堆栈段的段寄存器设置为0。</p>
+</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">.code16                                             # Assemble for 16-bit mode</div><div class="line">    cli                                             # Disable interrupts</div><div class="line">    cld                                             # String operations increment</div><div class="line"></div><div class="line">    # Set up the important data segment registers (DS, ES, SS).</div><div class="line">    xorw %ax, %ax                                   # Segment number zero</div><div class="line">    movw %ax, %ds                                   # -&gt; Data Segment</div><div class="line">    movw %ax, %es                                   # -&gt; Extra Segment</div><div class="line">    movw %ax, %ss                                   # -&gt; Stack Segment</div></pre></td></tr></table></figure>
+<h2 id="3-打开A20"><a href="#3-打开A20" class="headerlink" title="3 打开A20"></a>3 打开A20</h2><h3 id="3-1-背景"><a href="#3-1-背景" class="headerlink" title="3.1 背景"></a>3.1 背景</h3><p>为了兼容16位地址模式，32位CPU使用键盘控制器（8042控制器）的一个控制线（即A20控制线）来控制20-31位地址线的打开关闭。当A20控制线打开时可以使用20-31的地址线。而当A20 关闭时20-31的地址线全部为0。</p>
+<h3 id="3-2-8042控制器"><a href="#3-2-8042控制器" class="headerlink" title="3.2 8042控制器"></a>3.2 8042控制器</h3><p>8042控制器内部拥有4个8位寄存器：状态寄存器、输出寄存器、输入寄存器、控制寄存器，对外通过两个I/O端口：0x64（命令端口）、0x60（数据端口）进行通信。</p>
+<p>状态寄存器各位的定义如下：</p>
+<ul>
+<li>Bit7: 从键盘获得的数据奇偶校验错误</li>
+<li>Bit6: 接收超时，置1</li>
+<li>Bit5: 发送超时，置1</li>
+<li>Bit4: 为1，键盘没有被禁止。为0，键盘被禁止。</li>
+<li>Bit3: 为1，输入缓冲器中的内容为命令，为0，输入缓冲器中的内容为数据。</li>
+<li>Bit2: 系统标志，加电启动置0，自检通过后置1</li>
+<li>Bit1: 输入缓冲器满置1，i8042 取走后置0</li>
+<li>BitO: 输出缓冲器满置1，CPU读取后置0</li>
+</ul>
+<p>读写0x64和0x60的含义：</p>
+<ul>
+<li>读取0x64端口时，返回状态寄存器的内容，可以判断8042控制器的忙闲状态；</li>
+<li>写0x64端口时，一般写入操作命令。</li>
+<li>读写0x60端口一般都跟在写0x64端口后，主要作用是读取发送操作命令后控制器的响应，或者写入操作命令需要的参数。</li>
+</ul>
+<p>举个例子，如果要读取8042的控制寄存器的内容，需要发送20h命令，控制器就会把结果放在输出缓存器中等待CPU取走，接下来读取0x60端口读取内容；如果要写控制寄存器的内容，要发送60h命令，接下来将要设置的内容通过0x60端口写入。</p>
+<p>但需要注意的是，无论是通过哪个端口（0x60、0x64）写入数据，都需要等待8042的输入缓存为空，否则就会冲掉上次的输入。判断输入缓存为空只需要判断状态寄存器的第2位是否为0（见状态寄存器的Bit1位）。</p>
+<h3 id="3-3-A20使能"><a href="#3-3-A20使能" class="headerlink" title="3.3 A20使能"></a>3.3 A20使能</h3><p>A20控制线是8042输出端口的第2位，只要设置该输出端口为1，就可以打开A20。写输出端口的命令是0xD1。那么整个流程可以描述为：1）等待输入缓存为空；2）从0x64端口写入0xD1命令；3）等待输入缓存为空；4）从0x60端口写入要设置的数据。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">seta20.1:</div><div class="line">    inb $0x64, %al                                  # 读取状态寄存器</div><div class="line">    testb $0x2, %al                                 # 判断输入缓存是否为空</div><div class="line">    jnz seta20.1</div><div class="line">	# 0xd1表示写输出端口命令，参数随后通过0x60端口写入</div><div class="line">    movb $0xd1, %al                     </div><div class="line">    outb %al, $0x64</div><div class="line">                      </div><div class="line"># 等待8042将输入命令取走</div><div class="line">seta20.2:</div><div class="line">    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).</div><div class="line">    testb $0x2, %al</div><div class="line">    jnz seta20.2</div><div class="line">    # 通过0x60写入数据 11011111</div><div class="line">    movb $0xdf, %al                                 # 0xdf -&gt; port 0x60</div><div class="line">    outb %al, $0x60                                 # 0xdf = 11011111, means set P2&apos;s A20 bit(the 1 bit) to 1</div></pre></td></tr></table></figure>
+<h2 id="4-探测物理内存分布"><a href="#4-探测物理内存分布" class="headerlink" title="4 探测物理内存分布"></a>4 探测物理内存分布</h2><p>内核在管理内存前，需要知道物理内存的分布情况，哪些部分可以使用，哪些部分不能使用。内存分布情况可以通过BIOS中断来获取，具体就是INT 15h，参数eax为0xe820。</p>
+<p>在调用INT 15h中断获取内存分布情况时，需要设置一些输入参数：</p>
+<ol>
+<li>设置eax为0xE820</li>
+<li>es:edi指向缓存区，缓存返回的内存分布描述符（Address Range Descriptor），表示内存段的状态。</li>
+<li>ecx存放返回数据的大小，也就是内存分布描述符的大小，一般BIOS总是返回20字节</li>
+<li>edx的值为0x534d4150，也就是“SMAP”的ASCII码。</li>
+</ol>
+<p>输出：</p>
+<ol>
+<li>CF为1表示出现错误，否则无错</li>
+<li>eax为“SMAP”的ASCII码，用于验证BIOS的返回是否正确。</li>
+<li>es:di：返回内存分布描述符的地址，与输入值一样</li>
+<li>ebx：返回获取下一描述符的后续值，作为下次中断的输入值。如果为0，则表示所有描述符获取完毕。</li>
+</ol>
+<p>我们可以利用INT 15h获取到多个内存分布描述符。在ucore中，这些内存分布描述符存放在连续的内存空间中，也就是一个数组中，这个数组的起始地址为0x8004；而这个数组的长度存放在0x8000-0x8003的四字节内存中，作为整形使用。在kern/mm/memlayout.h中确实定义了等价的结构体e820map来表示这段内存：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">struct e820map &#123;</div><div class="line">    int nr_map;                # 4字节，表示描述符的数量</div><div class="line">    struct &#123;                   # 20字节的结构体</div><div class="line">        uint64_t addr;             # 8字节，表示内存段的起始地址</div><div class="line">        uint64_t size;             # 8字节，表示内存段的大小</div><div class="line">        uint32_t type;             # 4字节，表示内存段的类型：保留或空闲</div><div class="line">    &#125; __attribute__((packed)) map[E820MAX];   # 这是一个结构体数组</div><div class="line">&#125;;</div></pre></td></tr></table></figure></p>
+<p>再回到如何利用INT 15h获取e820map的汇编代码吧：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line">probe_memory:</div><div class="line">    movl $0, 0x8000          # 0x8000-0x8003代表e820map中的nr_map，初始值为0</div><div class="line">    xorl %ebx, %ebx          # ebx初始值设为0，以后每次的返回值作为输入</div><div class="line">    movw $0x8004, %di        # 0x8004代表e820map中数组map的初始地址</div><div class="line">start_probe:</div><div class="line">    movl $0xE820, %eax       # 给eax赋值为E820，由于eax会被修改，所以这条语句放在循环中，重复赋值为E820</div><div class="line">    movl $20, %ecx</div><div class="line">    movl $SMAP, %edx</div><div class="line">    int $0x15</div><div class="line">    jnc cont</div><div class="line">    movw $12345, 0x8000     # 出错后，将nr_map赋值为12345</div><div class="line">    jmp finish_probe</div><div class="line">cont:</div><div class="line">    addw $20, %di         # 缓存区地址增加20字节，也就是数组的下一元素</div><div class="line">    incl 0x8000           # nr_map++</div><div class="line">    cmpl $0, %ebx</div><div class="line">    jnz start_probe       # 判断是否存在下一个内存分布描述符</div><div class="line">finish_probe:</div></pre></td></tr></table></figure>
+<h2 id="5-进入保护模式"><a href="#5-进入保护模式" class="headerlink" title="5 进入保护模式"></a>5 进入保护模式</h2><p>将gdtdesc加载到gdtr。gdtdesc指向一块6字节内存，其中包含了全局描述符表（gdt）的位置和长度。</p>
+<p>gdt和gdtdesc的内容：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">gdt:</div><div class="line">    SEG_NULLASM                                     # null seg</div><div class="line">    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel</div><div class="line">    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel</div><div class="line"></div><div class="line">gdtdesc:</div><div class="line">    .word 0x17                                      # sizeof(gdt) - 1</div><div class="line">    .long gdt                                       # address gdt</div></pre></td></tr></table></figure></p>
+<p>接下来设置cr0的PE位（第0位）为1，开启保护模式。此时全局描述符表开始起作用，其中代码段和数据段的段基址均为0，也就是说此时的虚拟地址和线性地址是相等的。由于此时也没有开启分页模式，线性地址也就是物理地址。最后通过一条长跳转指令，进入32位代码段。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">lgdt gdtdesc</div><div class="line">movl %cr0, %eax</div><div class="line">orl $CR0_PE_ON, %eax</div><div class="line">movl %eax, %cr0</div><div class="line">ljmp $PROT_MODE_CSEG, $protcseg</div></pre></td></tr></table></figure>
+<p>接下来设置个数据段的段选择子（代码段的段选择子在ljmp执行后自动设置好），设置堆栈空间为0-0x7C00。堆栈设置好以后就可以调用C函数了。最后调用bootmain函数，此函数的主要作用就是从硬盘读取内核并加载到内存中并执行。</p>
+<h2 id="6-加载内核"><a href="#6-加载内核" class="headerlink" title="6 加载内核"></a>6 加载内核</h2><p>这部分的代码在boot/bootmain.c中，主要功能是从硬盘中读取内核（ELF文件）并加载到内存中。</p>
+<h3 id="6-1-磁盘操作"><a href="#6-1-磁盘操作" class="headerlink" title="6.1 磁盘操作"></a>6.1 磁盘操作</h3><p>对磁盘的操作需要通过IDE接口实现。其中IDE主通道的IO地址为0x1F0-0x1F7，IDE次通道的IO地址为0x170-0x177。每个通道可以挂载两块硬盘。这里需要操作的是第一个通道的第一块硬盘。</p>
+<p>对硬盘的读写有两种模式：CHS和LBA（logic block address）。CHS也就是通过柱面、磁头、扇区的方式读写硬盘，LBA就像内存一样，通过线性地址来访问磁盘。</p>
+<p>下面介绍LBA的方式读取硬盘。</p>
+<p>0x1F0 - 0x1F7的IO端口含义如下：</p>
+<ul>
+<li>0x1f0: 读/写数据</li>
+<li>0x1f1: 读取错误状态</li>
+<li>0x1f2: 读/写的扇区数目</li>
+<li>0x1f3: LBA的0-7位(相当于扇区)</li>
+<li>0x1f4: LBA的8-15位（相当于柱面）</li>
+<li>0x1f5: LBA的16-23位(相当于柱面)</li>
+<li>0x1f6: bit7、bit5必须为1；bit6：0为CHS模式，1为LBA模式；bit4：0为主盘，1为从盘；bit3-0：LBA的27-24位。</li>
+<li>0x1f7: 命令/状态寄存器。发送命令或读取状态。</li>
+</ul>
+<p>状态寄存器的各位被设置的含义：</p>
+<ul>
+<li>Bit7: 控制器忙</li>
+<li>Bit6: 正常运转（停止转动或出错，该位清零）</li>
+<li>Bit5: 控制器严重错误</li>
+<li>Bit4: Overlapped Mode Service Request</li>
+<li>Bit3: 控制器发出来数据或者准备好接收数据</li>
+<li>Bit0: 出错</li>
+</ul>
+<p>那么操作硬盘的步骤具体如下：</p>
+<ol>
+<li>等待硬盘控制器不忙</li>
+<li>写入操作硬盘的参数：模式、地址、主从盘等</li>
+<li>读/写数据</li>
+</ol>
+<h3 id="6-2-读取扇区"><a href="#6-2-读取扇区" class="headerlink" title="6.2 读取扇区"></a>6.2 读取扇区</h3><p>ucore将读取扇区的操作封装在函数readsect中：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div></pre></td><td class="code"><pre><div class="line">static void waitdisk(void) &#123;</div><div class="line">    while ((inb(0x1F7) &amp; 0xC0) != 0x40)  // 读取状态寄存器，等待空闲</div><div class="line">        /* do nothing */;</div><div class="line">&#125;</div><div class="line"></div><div class="line">/* 读取扇区号为secno的扇区到内存dst的地址中 */</div><div class="line">static void readsect(void *dst, uint32_t secno) &#123;</div><div class="line">    waitdisk();</div><div class="line"></div><div class="line">    outb(0x1F2, 1);                         // 读取扇区数为1</div><div class="line">    outb(0x1F3, secno &amp; 0xFF);            // secno的0-7位</div><div class="line">    outb(0x1F4, (secno &gt;&gt; 8) &amp; 0xFF);     // secno的8-15位</div><div class="line">    outb(0x1F5, (secno &gt;&gt; 16) &amp; 0xFF);    // secno的16-23位</div><div class="line">    outb(0x1F6, ((secno &gt;&gt; 24) &amp; 0xF) | 0xE0);  // secno的24-27位；0xE0=11100000b表示LBA模式、操作第一块硬盘</div><div class="line">    outb(0x1F7, 0x20);                      // 0x20读扇区命令</div><div class="line"></div><div class="line">    // wait for disk to be ready</div><div class="line">    waitdisk();</div><div class="line"></div><div class="line">    insl(0x1F0, dst, SECTSIZE / 4);</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<p>readseg函数调用了readsect函数，它的主要作用就是从内核偏移量为offset的地方读取count字节的数据，存放在起始位置为va的内存中。因为readsect是以整个扇区为单位读取，所以该函数读取的内容大于等于count。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line">static void readseg(uintptr_t va, uint32_t count, uint32_t offset) &#123;</div><div class="line">    uintptr_t end_va = va + count;      // 计算内存段可能的终止位置</div><div class="line"></div><div class="line">    // round down to sector boundary</div><div class="line">    va -= offset % SECTSIZE;            // 与扇区边界对齐</div><div class="line"></div><div class="line">    // translate from bytes to sectors; kernel starts at sector 1</div><div class="line">    uint32_t secno = (offset / SECTSIZE) + 1;  // 内核起始位置在第一个扇区（第0个扇区为bootloader）</div><div class="line"></div><div class="line">    // If this is too slow, we could read lots of sectors at a time.</div><div class="line">    // We&apos;d write more to memory than asked, but it doesn&apos;t matter --</div><div class="line">    // we load in increasing order.</div><div class="line">    for (; va &lt; end_va; va += SECTSIZE, secno ++) &#123;</div><div class="line">        readsect((void *)va, secno);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="6-3-ELF文件"><a href="#6-3-ELF文件" class="headerlink" title="6.3 ELF文件"></a>6.3 ELF文件</h3><p>ELF文件是指可执行链接格式（Executable and Linking Format），最初由UNIX 系统实验室开发并发布的，作为应用程序二进制接口的一部分，也是Linux的主要可执行文件。</p>
+<p>ELF文件有三种类型：1) 可重定位文件，也就是通常称的目标文件，后缀为.o。2) 共享文件：也就是通常称的库文件，后缀为.so。3) 可执行文件：本文主要考虑的文件格式。</p>
+<p>文件格式：<br><img src="a38fed2f8c0df5e4cf3b9e6186471.JPG" alt="文件格式"></p>
+<ul>
+<li>ELF头部：用来描述整个文件的组织</li>
+<li>程序头部表：是一个结构数组，它的大小等于ELF头表中字段e_phnum定义的条目，结构描述一个段或其他系统准备执行该程序所需要的信息。</li>
+</ul>
+<p>ucore中定义的ELF头结构：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div></pre></td><td class="code"><pre><div class="line">struct elfhdr &#123;</div><div class="line">    uint32_t e_magic;     // must equal ELF_MAGIC</div><div class="line">    uint8_t e_elf[12];</div><div class="line">    uint16_t e_type;      // 1=relocatable, 2=executable, 3=shared object, 4=core image</div><div class="line">    uint16_t e_machine;   // 3=x86, 4=68K, etc.</div><div class="line">    uint32_t e_version;   // file version, always 1</div><div class="line">    uint32_t e_entry;     // entry point if executable</div><div class="line">    uint32_t e_phoff;     // file position of program header or 0</div><div class="line">    uint32_t e_shoff;     // file position of section header or 0</div><div class="line">    uint32_t e_flags;     // architecture-specific flags, usually 0</div><div class="line">    uint16_t e_ehsize;    // size of this elf header</div><div class="line">    uint16_t e_phentsize; // size of an entry in program header</div><div class="line">    uint16_t e_phnum;     // number of entries in program header or 0</div><div class="line">    uint16_t e_shentsize; // size of an entry in section header</div><div class="line">    uint16_t e_shnum;     // number of entries in section header or 0</div><div class="line">    uint16_t e_shstrndx;  // section number that contains section name strings</div><div class="line">&#125;;</div></pre></td></tr></table></figure></p>
+<p>其中：</p>
+<ul>
+<li>e_magic是0x7f、’E’、’L’、’F’，常数</li>
+<li>e_elf[12]存放一些系统信息</li>
+<li>e_phoff：程序头部表在文件中的位置</li>
+<li>e_phnum：程序头部表中元素个数</li>
+<li>e_entry：可执行程序入口</li>
+</ul>
+<p>紧跟着ELF头部的就是<em>程序头部表</em>，它是一个数组，数组项的结构定义如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">struct proghdr &#123;</div><div class="line">    uint32_t p_type;   // loadable code or data, dynamic linking info,etc.</div><div class="line">    uint32_t p_offset; // 对应的段在文件中的位置</div><div class="line">    uint32_t p_va;     // 需要映射的虚拟地址</div><div class="line">    uint32_t p_pa;     // 物理地址，没用</div><div class="line">    uint32_t p_filesz; // 段在文件中的大小</div><div class="line">    uint32_t p_memsz;  // 段在内存中的大小</div><div class="line">    uint32_t p_flags;  // 段的标志</div><div class="line">    uint32_t p_align;  // 是否对齐</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
+<p>加载内核就是根据<em>程序头部表</em>的内容，将所有代码段加载到对应的内存中，并从ELF头部的可执行入口执行程序。</p>
+<ol>
+<li>首先bootloader将内核最开始4k的内容加载到内容64k的地方。这4k的内容包含了ELF头部和程序头部表的内容。</li>
+<li>遍历程序头部表，根据每一项的内容，加载对应的段到内存中。</li>
+<li>从ELF头部的e_entry项执行程序。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div></pre></td><td class="code"><pre><div class="line">void bootmain(void) &#123;</div><div class="line">    readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);  // 读取4k到ELFHDR位置</div><div class="line"></div><div class="line">    // is this a valid ELF?</div><div class="line">    if (ELFHDR-&gt;e_magic != ELF_MAGIC) &#123;</div><div class="line">        goto bad;</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    struct proghdr *ph, *eph;</div><div class="line"></div><div class="line">    // load each program segment (ignores ph flags)</div><div class="line">    ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR-&gt;e_phoff); //程序头部表起始位置</div><div class="line">    eph = ph + ELFHDR-&gt;e_phnum;   //程序头部表终止位置</div><div class="line">    for (; ph &lt; eph; ph ++) &#123;</div><div class="line">        // 加载段到地址p_va&amp;0xFFFFFF中。</div><div class="line">        readseg(ph-&gt;p_va &amp; 0xFFFFFF, ph-&gt;p_memsz, ph-&gt;p_offset);</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    // call the entry point from the ELF header</div><div class="line">    // note: does not return</div><div class="line">    ((void (*)(void))(ELFHDR-&gt;e_entry &amp; 0xFFFFFF))();</div><div class="line"></div><div class="line">bad:</div><div class="line">    outw(0x8A00, 0x8A00);</div><div class="line">    outw(0x8A00, 0x8E00);</div><div class="line"></div><div class="line">    /* do nothing */</div><div class="line">    while (1);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这里需要注意一点，段被加载到的物理内存对应的虚拟地址应该是ph-&gt;p_va，但这里是ph-&gt;p_va &amp; 0xFFFFFF，这是为什么？</p>
+<p>文件tools/kernel.ld是链接产生内核的ld脚本。从中可以看到代码段的起始虚拟地址是0xC0100000。内核实际被加载到了0xC0100000 &amp; 0xFFFFFF = 0x100000的物理地址中，也就是内存起始1M的地方。当前代码段和数据段的段基址均为0，且没有开启分页机制，虚拟地址等于物理地址。为了让内核正常运行，需要把虚拟地址0xC0100000映射到物理地址0x100000处。所以进入内核的第一件事就是重新设置gdt，设置代码段和数据段的段基址为-0xC0000000。这部分不在bootloader中，这里不详述了。</p>
+<p>另外，为了正确进入内核入口地址时，也需要和0xFFFFFF相与：ELFHDR-&gt;e_entry &amp; 0xFFFFFF = ELFHDR-&gt;e_entry - 0xC0000000，这是内核入口的真正物理地址。</p>
+<h2 id="7-参考"><a href="#7-参考" class="headerlink" title="7 参考"></a>7 参考</h2><ol>
+<li><a href="http://wiki.osdev.org/%228042%22\_PS/2\_Controller" target="_blank" rel="external">http://wiki.osdev.org/%228042%22\_PS/2\_Controller</a> “”8042” PS/2 Controller”</li>
+<li><a href="http://www.uruk.org/orig-grub/mem64mb.html" target="_blank" rel="external">http://www.uruk.org/orig-grub/mem64mb.html</a> “Query System Address Map”</li>
+<li><a href="http://wiki.osdev.org/ATA\_PIO\_Mode" target="_blank" rel="external">http://wiki.osdev.org/ATA\_PIO\_Mode</a> “ATA PIO Mode”</li>
+<li>滕启明 “ELF文件格式分析”</li>
+<li><a href="http://www.ibm.com/developerworks/cn/linux/l-excutff/" target="_blank" rel="external">http://www.ibm.com/developerworks/cn/linux/l-excutff/</a> “UNIX/LINUX 平台可执行文件格式分析”</li>
+</ol>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;1-总述&quot;&gt;&lt;a href=&quot;#1-总述&quot; class=&quot;headerlink&quot; title=&quot;1 总述&quot;&gt;&lt;/a&gt;1 总述&lt;/h2&gt;&lt;p&gt;bootloader的程序存放在硬盘的第一个扇区（512B）。BIOS程序会将bootloader加载到内存0x7c00处，
+    
+    </summary>
+    
+    
+      <category term="os" scheme="http://yoursite.com/tags/os/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>基于SDN的简单load balancer</title>
+    <link href="http://yoursite.com/2015/08/13/%E5%9F%BA%E4%BA%8ESDN%E7%9A%84%E7%AE%80%E5%8D%95load-balancer/"/>
+    <id>http://yoursite.com/2015/08/13/基于SDN的简单load-balancer/</id>
+    <published>2015-08-12T20:23:01.000Z</published>
+    <updated>2017-05-18T08:48:40.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="起因"><a href="#起因" class="headerlink" title="起因"></a>起因</h2><p>最近在看一个SDN相关的课程，链接：<a href="http://www.csg.ethz.ch/education/lectures/ATCN/hs2014" target="_blank" rel="external">http://www.csg.ethz.ch/education/lectures/ATCN/hs2014</a><br>虽然只能看课件，但感觉讲的很不错。课程还附带了几个课后任务，任务说明很详细，可以跟着一步一步做。其中一个就是基于POX控制器写一个简单的load balancer的控制程序。本文主要记录整个实验过程以及一些想法。</p>
+<h2 id="POX基础"><a href="#POX基础" class="headerlink" title="POX基础"></a>POX基础</h2><ul>
+<li>launch: launch函数用来完成加载模块的初始化工作，比如绑定各种事件响应函数，也可以在launch函数中注册其他类。</li>
+<li>Connection Up事件：当交换机和控制器建立连接时，触发该事件。</li>
+<li>connection.send()：connection指控制器与某交换机之间的连接，通过send()方法，控制器可以向该交换机发送OpenFlow信息。</li>
+<li>ofp_flow_mod：OpenFlow信息，向交换机中安装流表。ofp_flow_mod包含一些值得关注的域：match对象、actions列表、priority、idle timeout、hard timeout。</li>
+<li>ofp_match：ofp_flow_mod中的match对象，用来匹配数据包。比如要匹配MAC地址，就需要设置match对象的dl_src和dl_dst域。</li>
+<li>ofp_action_output：首先这是一个action对象，可以添加到ofp_flow_mod的actions列表中，指示将数据包输出到某个端口或者一些特殊定义的端口，比如of.OFPP_FLOOD。</li>
+<li>ofp_packet_out：控制器发给交换机的OpenFlow信息，指示交换机如何发送某个数据包。</li>
+</ul>
+<h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>实验中的网络拓扑是一个星型拓扑，一个交换机连着8个主机。其中前4个主机（h1-h4）相当于Clients，可以向作为Servers的后4个主机（h5-h8）发起请求。交换机被当作一个load balancer来平衡Clients与Servers之间的请求。Clients通过一个公共的Service IP发起请求，交换机相当于一个透明的代理，将请求分发到不同的Server端。<br>分发策略通过简单的随机方式实现。</p>
+<p><img src="d07ce2b6a86139a6b153363ba6149.JPG" alt=""></p>
+<h2 id="需求分析"><a href="#需求分析" class="headerlink" title="需求分析"></a>需求分析</h2><ol>
+<li><p>首先，交换机作为服务的透明代理，它需要知道真正的4个server分别和自己的哪些端口相连，这才能将请求正确地分发到不同的Server端。所以交换机应该主动发送ARP请求，记录Server的MAC地址，以及所在的端口。为了尽量减少请求的等待时长，交换机与控制器建立连接后，控制器应该马上指示交换机发送ARP请求。</p>
+</li>
+<li><p>客户端通过一个公共的IP（Service IP）来访问服务，而实际可能访问的是某个server。为了建立客户端到server的连接，当客户端发送ARP请求Service IP的MAC地址时，交换机应该使用一个伪MAC回答（这里使用0A:00:00:00:00:01）。而且这时交换机应该记录下客户端IP对应的MAC地址以及输入端口，这样当服务器响应后，它才能正确地传输给客户端。</p>
+</li>
+<li><p>Server响应客户端前，会向客户端发送ARP请求，交换机应该以自己的伪MAC地址回答。</p>
+</li>
+<li><p>客户端向Service IP发起请求，如果是新出现的客户端IP地址，交换机应该将请求随机定向到某个server上。这需要将数据包的目的IP地址和目的MAC地址重写为server的IP地址和MAC地址。同时源MAC地址为客户端的MAC地址，需要改写为交换机的伪MAC地址。</p>
+</li>
+<li><p>服务器向客户端响应时，交换机应该将源IP地址修改为Service IP地址，将源MAC地址改为交换机的伪MAC地址。同时将目的MAC地址改为正确的客户端MAC地址。</p>
+</li>
+</ol>
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div><div class="line">68</div><div class="line">69</div><div class="line">70</div><div class="line">71</div><div class="line">72</div><div class="line">73</div><div class="line">74</div><div class="line">75</div><div class="line">76</div><div class="line">77</div><div class="line">78</div><div class="line">79</div><div class="line">80</div><div class="line">81</div><div class="line">82</div><div class="line">83</div><div class="line">84</div><div class="line">85</div><div class="line">86</div><div class="line">87</div><div class="line">88</div><div class="line">89</div><div class="line">90</div><div class="line">91</div><div class="line">92</div><div class="line">93</div><div class="line">94</div><div class="line">95</div><div class="line">96</div><div class="line">97</div><div class="line">98</div><div class="line">99</div><div class="line">100</div><div class="line">101</div><div class="line">102</div><div class="line">103</div><div class="line">104</div><div class="line">105</div><div class="line">106</div><div class="line">107</div><div class="line">108</div><div class="line">109</div><div class="line">110</div><div class="line">111</div><div class="line">112</div><div class="line">113</div><div class="line">114</div><div class="line">115</div><div class="line">116</div><div class="line">117</div><div class="line">118</div><div class="line">119</div><div class="line">120</div><div class="line">121</div><div class="line">122</div><div class="line">123</div><div class="line">124</div><div class="line">125</div><div class="line">126</div><div class="line">127</div><div class="line">128</div><div class="line">129</div><div class="line">130</div><div class="line">131</div><div class="line">132</div><div class="line">133</div><div class="line">134</div><div class="line">135</div><div class="line">136</div><div class="line">137</div><div class="line">138</div><div class="line">139</div><div class="line">140</div><div class="line">141</div><div class="line">142</div><div class="line">143</div><div class="line">144</div><div class="line">145</div><div class="line">146</div><div class="line">147</div><div class="line">148</div><div class="line">149</div><div class="line">150</div><div class="line">151</div><div class="line">152</div><div class="line">153</div><div class="line">154</div><div class="line">155</div><div class="line">156</div><div class="line">157</div><div class="line">158</div><div class="line">159</div><div class="line">160</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">from</span> pox.core <span class="keyword">import</span> core</div><div class="line"><span class="keyword">from</span> pox.openflow <span class="keyword">import</span> *</div><div class="line"><span class="keyword">import</span> pox.openflow.libopenflow_01 <span class="keyword">as</span> of</div><div class="line"><span class="keyword">from</span> pox.lib.packet.arp <span class="keyword">import</span> arp</div><div class="line"><span class="keyword">from</span> pox.lib.packet.ethernet <span class="keyword">import</span> ethernet, ETHER_BROADCAST</div><div class="line"><span class="keyword">from</span> pox.lib.packet.ipv4 <span class="keyword">import</span> ipv4</div><div class="line"><span class="keyword">from</span> pox.lib.addresses <span class="keyword">import</span> EthAddr, IPAddr</div><div class="line">log = core.getLogger()</div><div class="line"><span class="keyword">import</span> time</div><div class="line"><span class="keyword">import</span> random</div><div class="line"></div><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">SimpleLoadBalancer</span><span class="params">(object)</span>:</span></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span><span class="params">(self, service_ip, server_ips = [])</span>:</span> <span class="comment">#initialize</span></div><div class="line">        core.openflow.addListeners(self)</div><div class="line">        self.service_ip = service_ip</div><div class="line">        self.server_ips = server_ips</div><div class="line">        self.server_ip2mac = &#123;&#125;</div><div class="line">        self.mac2port = &#123;&#125;</div><div class="line">        self.ip2mac = &#123;&#125;</div><div class="line">        self.client2server = &#123;&#125;</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">_handle_ConnectionUp</span><span class="params">(self, event)</span>:</span> <span class="comment">#new switch connection</span></div><div class="line">        self.lb_mac = EthAddr(<span class="string">"0A:00:00:00:00:01"</span>) <span class="comment">#fake mac of load balancer</span></div><div class="line">        self.connection = event.connection</div><div class="line">        <span class="keyword">for</span> server_ip <span class="keyword">in</span> self.server_ips:</div><div class="line">            self.send_proxied_arp_request(self.connection, server_ip)</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">update_lb_mapping</span><span class="params">(self, client_ip)</span>:</span> <span class="comment">#update load balancing mapping</span></div><div class="line">        rnd = random.randint(<span class="number">0</span>, len(self.server_ip2mac)<span class="number">-1</span>)</div><div class="line">        server_ip = self.server_ip2mac.keys()[rnd]</div><div class="line">        <span class="keyword">return</span> server_ip</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">send_proxied_arp_reply</span><span class="params">(self, packet, connection, outport, requested_mac)</span>:</span></div><div class="line">        r = arp()</div><div class="line">        r.opcode = arp.REPLY</div><div class="line">        r.hwsrc = requested_mac</div><div class="line">        r.hwdst = packet.src</div><div class="line">        r.protosrc = packet.next.protodst</div><div class="line">        r.protodst = packet.next.protosrc</div><div class="line">        e = ethernet(type=ethernet.ARP_TYPE, src=self.lb_mac, dst=packet.src)</div><div class="line">        e.set_payload(r)</div><div class="line">        log.debug(<span class="string">"Load balancer reply to %s's ARP \"%s is at %s\""</span> %</div><div class="line">                  (r.protodst, r.protosrc, r.hwsrc))</div><div class="line">        msg = of.ofp_packet_out()</div><div class="line">        msg.data = e.pack()</div><div class="line">        msg.actions.append(of.ofp_action_output(port=outport))</div><div class="line">        connection.send(msg)</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">send_proxied_arp_request</span><span class="params">(self, connection, ip)</span>:</span></div><div class="line">        r = arp()</div><div class="line">        r.opcode = arp.REQUEST</div><div class="line">        r.hwsrc = self.lb_mac</div><div class="line">        r.hwdst = ETHER_BROADCAST</div><div class="line">        r.protosrc = self.service_ip</div><div class="line">        r.protodst = ip</div><div class="line">        e = ethernet(type=ethernet.ARP_TYPE, src=self.lb_mac, dst=ETHER_BROADCAST)</div><div class="line">        e.set_payload(r)</div><div class="line">        msg = of.ofp_packet_out()</div><div class="line">        msg.data = e.pack()</div><div class="line">        msg.actions.append(of.ofp_action_output(port=of.OFPP_FLOOD))</div><div class="line">        log.info(<span class="string">"Load balancer ARPing for %s's MAC"</span> % ip)</div><div class="line">        connection.send(msg)</div><div class="line"></div><div class="line">   <span class="function"><span class="keyword">def</span> <span class="title">install_flow_rule_client_to_server</span><span class="params">(self, connection, outport, client_ip,</span></span></div><div class="line">                                           server_ip, buffer_id=of.NO_BUFFER):</div><div class="line">        match = of.ofp_match()</div><div class="line">        match.dl_type = ethernet.IP_TYPE</div><div class="line">        match.nw_src = client_ip</div><div class="line">        match.nw_dst = self.service_ip</div><div class="line">        msg = of.ofp_flow_mod()</div><div class="line">        msg.match = match</div><div class="line">        msg.buffer_id = buffer_id</div><div class="line">        msg.idle_timeout = <span class="number">10</span></div><div class="line">        server_mac = self.server_ip2mac[server_ip]</div><div class="line">        msg.actions.append(of.ofp_action_dl_addr.set_src(self.lb_mac))</div><div class="line">        msg.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))</div><div class="line">        msg.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))</div><div class="line">        msg.actions.append(of.ofp_action_output(port=outport))</div><div class="line">        log.info(<span class="string">"Installing flow rule for client %s to server %s"</span> % (client_ip, server_ip))</div><div class="line">        connection.send(msg)</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">install_flow_rule_server_to_client</span><span class="params">(self, connection, outport, server_ip,</span></span></div><div class="line">                                           client_ip, buffer_id=of.NO_BUFFER):</div><div class="line">        match = of.ofp_match()</div><div class="line">        match.dl_type = ethernet.IP_TYPE</div><div class="line">        match.nw_src = server_ip</div><div class="line">        match.nw_dst = client_ip</div><div class="line">        msg = of.ofp_flow_mod()</div><div class="line">        msg.match = match</div><div class="line">        msg.buffer_id = buffer_id</div><div class="line">        msg.idle_timeout = <span class="number">10</span></div><div class="line">        client_mac = self.ip2mac[client_ip]</div><div class="line">        msg.actions.append(of.ofp_action_nw_addr.set_src(self.service_ip))</div><div class="line">        msg.actions.append(of.ofp_action_dl_addr.set_src(self.lb_mac))</div><div class="line">        msg.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))</div><div class="line">        msg.actions.append(of.ofp_action_output(port=outport))</div><div class="line">        log.info(<span class="string">"Installing flow rule for server %s to client %s"</span> % (server_ip, client_ip))</div><div class="line">        connection.send(msg)</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">def</span> <span class="title">_handle_PacketIn</span><span class="params">(self, event)</span>:</span></div><div class="line">        packet = event.parsed</div><div class="line">        connection = event.connection</div><div class="line">        inport = event.port</div><div class="line">        self.mac2port[packet.src] = inport</div><div class="line">        <span class="keyword">if</span> packet.type == packet.ARP_TYPE:</div><div class="line">            r = packet.next</div><div class="line">            <span class="keyword">if</span> r.opcode == r.REQUEST:</div><div class="line">                <span class="keyword">if</span> r.protodst == self.service_ip:</div><div class="line">                    log.info(<span class="string">"%s ARPing for %s's MAC"</span> % (str(r.protosrc), str(self.service_ip)))</div><div class="line">                    self.send_proxied_arp_reply(packet, connection, inport, self.lb_mac)</div><div class="line">                <span class="comment"># server请求client 地址</span></div><div class="line">                <span class="keyword">elif</span> r.protosrc <span class="keyword">in</span> self.server_ips <span class="keyword">and</span> r.protodst <span class="keyword">not</span> <span class="keyword">in</span> self.server_ips:</div><div class="line">                    log.info(<span class="string">"Server %s ARPing for client %s's MAC"</span> % (r.protosrc, r.protodst))</div><div class="line">                    self.send_proxied_arp_request(connection, r.protodst)</div><div class="line">                    self.send_proxied_arp_reply(packet, connection, inport, self.lb_mac)</div><div class="line">            <span class="keyword">elif</span> r.opcode == r.REPLY:</div><div class="line">                <span class="comment"># load balancer请求server ip的arp响应</span></div><div class="line">                <span class="keyword">if</span> r.protosrc <span class="keyword">in</span> self.server_ips <span class="keyword">and</span> r.protodst == self.service_ip:</div><div class="line">                    log.info(<span class="string">"Server %s reply to load balancer's ARP \"%s is at %s\""</span> %</div><div class="line">                             (r.protosrc, r.protosrc, r.hwsrc))</div><div class="line">                    self.server_ip2mac[r.protosrc] = r.hwsrc</div><div class="line">                <span class="comment"># client回复load balancer的arp请求</span></div><div class="line">                <span class="keyword">elif</span> r.protosrc <span class="keyword">not</span> <span class="keyword">in</span> self.server_ips <span class="keyword">and</span> r.protodst == self.service_ip:</div><div class="line">                    log.info(<span class="string">"Client %s reply to load balancer's ARP \"%s is at %s\""</span> %</div><div class="line">                             (r.protosrc, r.protosrc, r.hwsrc))</div><div class="line">                    self.ip2mac[r.protosrc] = packet.src</div><div class="line">        <span class="keyword">elif</span> packet.type == ethernet.IP_TYPE:</div><div class="line">            ip = packet.next</div><div class="line">            <span class="keyword">if</span> ip.dstip == self.service_ip:</div><div class="line">                <span class="keyword">if</span> ip.srcip <span class="keyword">not</span> <span class="keyword">in</span> self.server_ips:</div><div class="line">                    <span class="comment"># 客户端向service发起的请求</span></div><div class="line">                    server_ip = self.update_lb_mapping(ip.srcip)</div><div class="line">                    server_mac = self.server_ip2mac[server_ip]</div><div class="line">                    outport = self.mac2port[server_mac]</div><div class="line">                    buffer_id = event.ofp.buffer_id</div><div class="line">                    log.debug(<span class="string">"client to server port: %s"</span> % outport)</div><div class="line">                    self.install_flow_rule_client_to_server(connection, outport,</div><div class="line">                                                                ip.srcip, server_ip, buffer_id)</div><div class="line">            <span class="keyword">elif</span> ip.srcip <span class="keyword">in</span> self.server_ips <span class="keyword">and</span> ip.dstip <span class="keyword">not</span> <span class="keyword">in</span> self.server_ips:</div><div class="line">                client_mac = self.ip2mac.get(ip.dstip)</div><div class="line">                <span class="keyword">if</span> <span class="keyword">not</span> client_mac:</div><div class="line">                    self.send_proxied_arp_request(connection, ip.dstip)</div><div class="line">                    <span class="keyword">return</span></div><div class="line">                outport = self.mac2port[client_mac]</div><div class="line">                log.debug(<span class="string">"client to server port: %s"</span> % outport)</div><div class="line">                self.install_flow_rule_server_to_client(connection, outport,</div><div class="line">                                                            ip.srcip, ip.dstip)</div><div class="line">        <span class="keyword">else</span>:</div><div class="line">            log.info(<span class="string">"Unknown Packet type: %s"</span> % packet.type)</div><div class="line">            <span class="keyword">return</span></div><div class="line">        <span class="keyword">return</span></div><div class="line"></div><div class="line"><span class="comment">#launch application with following arguments:</span></div><div class="line"><span class="comment">#ip: public service ip, servers: ip addresses of servers (in string format)</span></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">launch</span><span class="params">(ip, servers)</span>:</span></div><div class="line">    log.info(<span class="string">"Loading Simple Load Balancer module"</span>)</div><div class="line">    server_ips = servers.replace(<span class="string">","</span>,<span class="string">" "</span>).split()</div><div class="line">    server_ips = [IPAddr(x) <span class="keyword">for</span> x <span class="keyword">in</span> server_ips]</div><div class="line">    service_ip = IPAddr(ip)</div><div class="line">    core.registerNew(SimpleLoadBalancer, service_ip, server_ips)</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;起因&quot;&gt;&lt;a href=&quot;#起因&quot; class=&quot;headerlink&quot; title=&quot;起因&quot;&gt;&lt;/a&gt;起因&lt;/h2&gt;&lt;p&gt;最近在看一个SDN相关的课程，链接：&lt;a href=&quot;http://www.csg.ethz.ch/education/lectures/A
+    
+    </summary>
+    
+    
+      <category term="sdn" scheme="http://yoursite.com/tags/sdn/"/>
+    
+      <category term="python" scheme="http://yoursite.com/tags/python/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>git使用</title>
+    <link href="http://yoursite.com/2015/07/09/git%E4%BD%BF%E7%94%A8/"/>
+    <id>http://yoursite.com/2015/07/09/git使用/</id>
+    <published>2015-07-08T20:43:57.000Z</published>
+    <updated>2017-05-18T08:40:50.000Z</updated>
+    
+    <content type="html"><![CDATA[<img src="/2015/07/09/git使用/fcbf32f42c9be5416954934b5b091.png" alt="fcbf32f42c9be5416954934b5b091.png" title="">]]></content>
+    
+    <summary type="html">
+    
+      &lt;img src=&quot;/2015/07/09/git使用/fcbf32f42c9be5416954934b5b091.png&quot; alt=&quot;fcbf32f42c9be5416954934b5b091.png&quot; title=&quot;&quot;&gt;
+    
+    </summary>
+    
+    
+      <category term="git" scheme="http://yoursite.com/tags/git/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>python监控网卡流量</title>
+    <link href="http://yoursite.com/2015/06/09/python%E7%9B%91%E6%8E%A7%E7%BD%91%E5%8D%A1%E6%B5%81%E9%87%8F/"/>
+    <id>http://yoursite.com/2015/06/09/python监控网卡流量/</id>
+    <published>2015-06-09T14:28:26.000Z</published>
+    <updated>2017-05-18T08:35:33.000Z</updated>
+    
+    <content type="html"><![CDATA[<figure class="highlight python"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div><div class="line">61</div><div class="line">62</div><div class="line">63</div><div class="line">64</div><div class="line">65</div><div class="line">66</div><div class="line">67</div><div class="line">68</div><div class="line">69</div><div class="line">70</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">import</span> time</div><div class="line"><span class="keyword">import</span> threading</div><div class="line"><span class="keyword">import</span> signal</div><div class="line"><span class="keyword">from</span> datetime <span class="keyword">import</span> datetime</div><div class="line"></div><div class="line">last_in_bytes = <span class="keyword">None</span></div><div class="line">last_out_bytes = <span class="keyword">None</span></div><div class="line"></div><div class="line"></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">curr_traffic</span><span class="params">(inf)</span>:</span></div><div class="line">    <span class="keyword">global</span> last_in_bytes, last_out_bytes</div><div class="line">    in_traffic, out_traffic = <span class="keyword">None</span>, <span class="keyword">None</span></div><div class="line">    <span class="keyword">with</span> open(<span class="string">'/proc/net/dev'</span>) <span class="keyword">as</span> f:</div><div class="line">        lines = f.readlines()</div><div class="line">        <span class="keyword">for</span> line <span class="keyword">in</span> lines[<span class="number">2</span>:]:</div><div class="line">            line = line.strip()</div><div class="line">            <span class="keyword">if</span> line.startswith(inf + <span class="string">':'</span>):</div><div class="line">                items = line.strip().split(<span class="string">':'</span>)[<span class="number">1</span>].split()</div><div class="line">                in_bytes, out_bytes = int(items[<span class="number">0</span>]), int(items[<span class="number">8</span>])</div><div class="line">                <span class="keyword">if</span> last_in_bytes:</div><div class="line">                    in_traffic, out_traffic = in_bytes - last_in_bytes, out_bytes - last_out_bytes</div><div class="line">                last_in_bytes, last_out_bytes = in_bytes, out_bytes</div><div class="line">                <span class="keyword">return</span> in_traffic, out_traffic</div><div class="line"></div><div class="line">next_thread = <span class="keyword">None</span></div><div class="line">exit_flag = <span class="keyword">False</span></div><div class="line"></div><div class="line"></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">thread_job</span><span class="params">(f_handler, inf=<span class="string">'eth0'</span>, interval=<span class="number">2</span>)</span>:</span></div><div class="line">    <span class="keyword">global</span> next_thread, exit_flag</div><div class="line">    time.sleep(interval)</div><div class="line">    <span class="keyword">if</span> <span class="keyword">not</span> exit_flag:</div><div class="line">        next_thread = threading.Thread(target=thread_job, args=(f_handler, inf, interval))</div><div class="line">        next_thread.start()</div><div class="line">    <span class="keyword">else</span>:</div><div class="line">        next_thread = <span class="keyword">None</span></div><div class="line">    time_stamp = int(time.time())</div><div class="line">    in_traffic, out_traffic = curr_traffic(inf)</div><div class="line">    <span class="keyword">print</span> in_traffic, out_traffic</div><div class="line">    <span class="keyword">if</span> in_traffic <span class="keyword">is</span> <span class="keyword">not</span> <span class="keyword">None</span> <span class="keyword">and</span> out_traffic <span class="keyword">is</span> <span class="keyword">not</span> <span class="keyword">None</span> <span class="keyword">and</span> <span class="keyword">not</span> f_handler.closed:</div><div class="line">        f_handler.write(<span class="string">'%d, %d, %d\n'</span> % (time_stamp, in_traffic, out_traffic))</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">exit_func</span><span class="params">(signum, stack)</span>:</span></div><div class="line">    <span class="keyword">global</span> exit_flag</div><div class="line">    exit_flag = <span class="keyword">True</span></div><div class="line">    print(<span class="string">"Exiting ..."</span>)</div><div class="line">    cnt = <span class="number">0</span></div><div class="line">    <span class="keyword">while</span> <span class="keyword">not</span> next_thread <span class="keyword">and</span> cnt &lt; <span class="number">3</span>:</div><div class="line">        time.sleep(<span class="number">1</span>)</div><div class="line">        cnt += <span class="number">1</span></div><div class="line">    <span class="keyword">if</span> cnt &gt;= <span class="number">3</span>:</div><div class="line">        next_thread.exit()</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">output_traffics</span><span class="params">(outfile, inf=<span class="string">'eth0'</span>, interval=<span class="number">1</span>)</span>:</span></div><div class="line">    <span class="keyword">with</span> open(outfile, <span class="string">'w'</span>) <span class="keyword">as</span> f:</div><div class="line">        f.write(<span class="string">'time, in_rate(B/s), out_rate(B/s)\n'</span>)</div><div class="line">        thread_job(f, inf, interval)</div><div class="line">        <span class="keyword">while</span> <span class="keyword">not</span> exit_flag:</div><div class="line">            time.sleep(<span class="number">1</span>)</div><div class="line"></div><div class="line"></div><div class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</div><div class="line">    signal.signal(signal.SIGINT, exit_func)</div><div class="line">    signal.signal(signal.SIGINT, exit_func)</div><div class="line">    args = &#123;</div><div class="line">        <span class="string">'outfile'</span>: time.strftime(<span class="string">"%Y%m%d%H%M%S"</span>, time.localtime(time.time())) + <span class="string">'.csv'</span>,</div><div class="line">        <span class="string">'inf'</span>: <span class="string">'eth0'</span>,</div><div class="line">        <span class="string">'interval'</span>: <span class="number">1</span></div><div class="line">    &#125;</div><div class="line">    output_traffics(**args)</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;figure class=&quot;highlight python&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;div class=&quot;line&quot;&gt;1&lt;/div&gt;&lt;div class=&quot;line&quot;&gt;2&lt;/div&gt;&lt;div class=&quot;line&quot;&gt;3&lt;/d
+    
+    </summary>
+    
+    
+      <category term="python" scheme="http://yoursite.com/tags/python/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>[LeetCode]Median of Two Sorted Arrays</title>
+    <link href="http://yoursite.com/2015/03/19/LeetCode-Median-of-Two-Sorted-Arrays/"/>
+    <id>http://yoursite.com/2015/03/19/LeetCode-Median-of-Two-Sorted-Arrays/</id>
+    <published>2015-03-18T18:33:06.000Z</published>
+    <updated>2017-05-18T08:32:25.000Z</updated>
+    
+    <content type="html"><![CDATA[<blockquote>
+<p>There are two sorted arrays A and B of size m and n respectively. Find the median of the two sorted arrays. The overall run time complexity should be O(log (m+n)).</p>
+<p>中位数：有m个数，如果m为基数，那么中位数正好是第(m+1)/2个数；如果m为偶数，中位数应该是中间两个数（第m/2和第m/2+1个）的平均值</p>
+</blockquote>
+<ul>
+<li>第一种方法（默认数列从小到大排序）：<ol>
+<li>寻找中位数就是搜索处于有序数列中间的那个数，可以转化为搜索第k个数的值</li>
+<li>如果数列A的长度大于等于k：首先比较数列A的第k个数x和数列B第一个数y。<ul>
+<li>如果x小于等于y，那么x同时是所有数的第k个数，返回x；</li>
+<li>如果x大于y，很遗憾，x在top k以外，那么数列A的第k个到最后的数都被排除了，这样在新的数列A和数列B中搜索top k，这是一个递归过程。</li>
+</ul>
+</li>
+<li>如果数列A的长度小于k的话：那么就比较数列A的最后一个（第m个）x和数列B的第k-m个y。<ul>
+<li>如果y大于等于x，那么就相当于A数列的m个数都在top k之内，而y正好是第k个。</li>
+<li>如果y小于x，那么y显然在top k内，但不是第k个。那么就可以把B数列中y以及y之前的k-m个数都去掉，然后查找第m个数（因为y以及y之前的数都在top k之内，去掉之后，要找的数由第k个变为第m个），递归搜索</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span></div><div class="line"><span class="keyword">public</span>:</div><div class="line">    <span class="function"><span class="keyword">double</span> <span class="title">findMedianSortedArrays</span><span class="params">(<span class="keyword">int</span> A[], <span class="keyword">int</span> m, <span class="keyword">int</span> B[], <span class="keyword">int</span> n)</span> </span>&#123;</div><div class="line">    	<span class="keyword">if</span> ((m+n) % <span class="number">2</span>)</div><div class="line">    		<span class="keyword">return</span> findTopK(A, m, B, n, (m+n)/<span class="number">2</span>+<span class="number">1</span>);</div><div class="line">    	<span class="keyword">else</span></div><div class="line">    		<span class="keyword">return</span> (findTopK(A, m, B, n, (m+n)/<span class="number">2</span>) + findTopK(A, m, B, n, (m+n)/<span class="number">2</span>+<span class="number">1</span>))/<span class="number">2.0</span>;</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="function"><span class="keyword">double</span> <span class="title">findTopK</span><span class="params">(<span class="keyword">int</span> A[], <span class="keyword">int</span> m, <span class="keyword">int</span> B[], <span class="keyword">int</span> n, <span class="keyword">int</span> k)</span> </span>&#123;</div><div class="line">    	<span class="keyword">if</span> (m == <span class="number">0</span>)</div><div class="line">    		<span class="keyword">return</span> B[k<span class="number">-1</span>];</div><div class="line">    	<span class="keyword">if</span> (n == <span class="number">0</span>)</div><div class="line">    		<span class="keyword">return</span> A[k<span class="number">-1</span>];</div><div class="line"></div><div class="line">    	<span class="keyword">if</span> (k &lt;= m) &#123;</div><div class="line">    		<span class="keyword">if</span> (A[k<span class="number">-1</span>] &lt;= B[<span class="number">0</span>])</div><div class="line">    			<span class="keyword">return</span> A[k<span class="number">-1</span>];</div><div class="line">    		<span class="keyword">else</span></div><div class="line">    			<span class="keyword">return</span> findTopK(B, n, A, k<span class="number">-1</span>, k);</div><div class="line">    	&#125; <span class="keyword">else</span> &#123;</div><div class="line">    		<span class="keyword">if</span> (A[m<span class="number">-1</span>] &lt;= B[k-m<span class="number">-1</span>])</div><div class="line">    			<span class="keyword">return</span> B[k-m<span class="number">-1</span>];</div><div class="line">    		<span class="keyword">else</span> <span class="keyword">if</span> ((A[m<span class="number">-1</span>] &gt; B[k-m<span class="number">-1</span>])) &#123;</div><div class="line">    			<span class="keyword">return</span> findTopK(A, m, B+k-m, m+n-k, m);</div><div class="line">    		&#125;</div><div class="line">    	&#125;</div><div class="line">    &#125;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
+<ul>
+<li><p>第二种方法：</p>
+<p>  第一种方法中，最坏情况下的复杂度为O(k)。最坏情况就是top k的数字在数列A、B中各占一半。如果k特别大的话，会比较慢。</p>
+<p>  第二中方法的思路就是每次从A、B数列中各选一部分，总共k个数；然后比较A、B选取部分的最后一个数。小的数肯定属于top k-1，大的数有可能是第k个，也有可能大于k。</p>
+<p>  举例说明：假如选A的前u个，选B的前v个，u+v=k。然后比较A[u-1]和B[v-1]的大小。假如A[u-1]&gt;B[v-1]，那么A[u-1]是这k个数最大的，B[0]到B[v-1]肯定属于前k-1个数。但A[u-1]也不一定是第k个，因为B中没选的数可能小于它。</p>
+<p>  因为可以确定B[0]到B[v-1]这v个数都不可能是第k个，直接排除掉。然后采用递归的方式搜索剩下数字的第k-v个数（原来的第k个数）。</p>
+<p>  在递归过程中，k的值在不断减小，如果等于1的话，直接返回A、B中的最小值。</p>
+<p>  最后的问题：u和v的选择。尽量将k按比例分布在A、B上，也就是取A、B长度的一半。</p>
+</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div></pre></td><td class="code"><pre><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span></div><div class="line"><span class="keyword">public</span>:</div><div class="line">	<span class="function"><span class="keyword">double</span> <span class="title">findMedianSortedArrays</span><span class="params">(<span class="keyword">int</span> A[], <span class="keyword">int</span> m, <span class="keyword">int</span> B[], <span class="keyword">int</span> n)</span> </span>&#123;</div><div class="line">		<span class="keyword">if</span> ((m + n) % <span class="number">2</span>)</div><div class="line">			<span class="keyword">return</span> findTopK(A, m, B, n, (m + n) / <span class="number">2</span> + <span class="number">1</span>);</div><div class="line">		<span class="keyword">else</span></div><div class="line">			<span class="keyword">return</span> (findTopK(A, m, B, n, (m + n) / <span class="number">2</span>) + findTopK(A, m, B, n, (m + n) / <span class="number">2</span> + <span class="number">1</span>)) / <span class="number">2</span>;</div><div class="line">	&#125;</div><div class="line"></div><div class="line">	<span class="function"><span class="keyword">double</span> <span class="title">findTopK</span><span class="params">(<span class="keyword">int</span> A[], <span class="keyword">int</span> m, <span class="keyword">int</span> B[], <span class="keyword">int</span> n, <span class="keyword">int</span> k)</span> </span>&#123;</div><div class="line">		<span class="keyword">if</span> (m == <span class="number">0</span>)</div><div class="line">			<span class="keyword">return</span> (<span class="keyword">double</span>)B[k - <span class="number">1</span>];</div><div class="line">		<span class="keyword">if</span> (n == <span class="number">0</span>)</div><div class="line">			<span class="keyword">return</span> (<span class="keyword">double</span>)A[k - <span class="number">1</span>];</div><div class="line">		<span class="keyword">if</span> (k == <span class="number">1</span>)</div><div class="line">			<span class="keyword">return</span> A[<span class="number">0</span>] &lt; B[<span class="number">0</span>] ? A[<span class="number">0</span>] : B[<span class="number">0</span>];</div><div class="line"></div><div class="line">		<span class="keyword">if</span> (m &gt; k)</div><div class="line">			m = k;</div><div class="line">		<span class="keyword">if</span> (n &gt; k)</div><div class="line">			n = k;</div><div class="line">		<span class="keyword">int</span> mid_a, mid_b;</div><div class="line">		<span class="keyword">if</span> (m &lt; n) &#123;</div><div class="line">			mid_a = (m<span class="number">-1</span>)/<span class="number">2</span>;</div><div class="line">			mid_b = k - mid_a - <span class="number">2</span>;</div><div class="line">		&#125; <span class="keyword">else</span> &#123;</div><div class="line">			mid_b = (n<span class="number">-1</span>)/<span class="number">2</span>;</div><div class="line">			mid_a = k - mid_b - <span class="number">2</span>;</div><div class="line">		&#125;</div><div class="line">		<span class="keyword">if</span> (A[mid_a] &lt; B[mid_b])</div><div class="line">			<span class="keyword">return</span> findTopK(A+mid_a+<span class="number">1</span>, m-mid_a<span class="number">-1</span>, B, n, k-mid_a<span class="number">-1</span>);</div><div class="line">		<span class="keyword">else</span> <span class="keyword">if</span> (A[mid_a] &gt; B[mid_b]) </div><div class="line">			<span class="keyword">return</span> findTopK(A, m, B+mid_b+<span class="number">1</span>, n-mid_b<span class="number">-1</span>, k-mid_b<span class="number">-1</span>);</div><div class="line">		<span class="keyword">else</span></div><div class="line">			<span class="keyword">return</span> A[mid_a];</div><div class="line">	&#125;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;blockquote&gt;
+&lt;p&gt;There are two sorted arrays A and B of size m and n respectively. Find the median of the two sorted arrays. The overall run 
+    
+    </summary>
+    
+    
+      <category term="leetcode" scheme="http://yoursite.com/tags/leetcode/"/>
+    
+      <category term="c++" scheme="http://yoursite.com/tags/c/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>[译]管理堆空间：使用JVMTI循环类实例</title>
+    <link href="http://yoursite.com/2015/03/12/%E8%AF%91-%E7%AE%A1%E7%90%86%E5%A0%86%E7%A9%BA%E9%97%B4%EF%BC%9A%E4%BD%BF%E7%94%A8JVMTI%E5%BE%AA%E7%8E%AF%E7%B1%BB%E5%AE%9E%E4%BE%8B/"/>
+    <id>http://yoursite.com/2015/03/12/译-管理堆空间：使用JVMTI循环类实例/</id>
+    <published>2015-03-11T19:50:13.000Z</published>
+    <updated>2017-05-18T08:31:50.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>好久没更新了，把为<a href="http://fanyi.jobbole.com/4845/" target="_blank" rel="external">伯乐在线</a>、Importnew翻译的一篇文章发上来吧。</p>
+<p>原文：<a href="http://www.javacodegeeks.com/2014/12/own-your-heap-iterate-class-instances-with-jvmti.html" target="_blank" rel="external">http://www.javacodegeeks.com/2014/12/own-your-heap-iterate-class-instances-with-jvmti.html</a></p>
+<p>今天我想探讨Java的另一面，我们平时不会注意到或者不会使用到的一面。更准确的说是关于底层绑定、本地代码（native code）以及如何实现一些小魔法。虽然我们不会在JVM层面上探究这是怎么实现的，但我们会通过这篇文章展示一些奇迹。</p>
+<p>我在ZeroTurnaround的RebelLabs团队中主要工作是做研究、撰文、编程。这个公司主要开发面向Java开发者的工具，大部分以Java插件（javaagent）的方式运行。经常会遇到这种情况，如果你想在不重写JVM的前提下增强JVM或者提高它的性能，你就必须深入研究Java插件的神奇世界。插件包括两类：Java javaagents和Native javaagents。本文主要讨论后者。</p>
+<blockquote>
+<p><a href="https://twitter.com/antonarhipov" target="_blank" rel="external">Anton Arhipov</a>——<a href="http://zeroturnaround.com/software/xrebel/" target="_blank" rel="external">XRebel</a>产品的领导者，在布拉格的GeeCON会议上做了<a href="https://speakerdeck.com/antonarhipov/geecon-prague-2014-having-fun-with-javassist" target="_blank" rel="external">“Having fun with Javassist”</a>的演讲。这个演讲可以作为了解完全使用Java开发javaagents的一个起点。</p>
+</blockquote>
+<p>本文中，我们会创建一个小的Native JVM插件，探究向Java应用提供Native方法的可能性以及如何使用<a href="http://download.oracle.com/javase/8/docs/technotes/guides/jvmti/" target="_blank" rel="external">Java虚拟机工具接口(JVM TI)</a>。</p>
+<p>如果你想从本文获取一些干货，那是必须的。剧透下，我们可以计算给定类在堆空间中包含多少实例。</p>
+<p>假设你是圣诞老人值得信赖的一个黑客精灵，圣诞老人有一些挑战让你做：</p>
+<p><strong>Santa：</strong> <em>我亲爱的黑客精灵，你能写一个程序，算出当前JVM堆中有多少Thread实例吗？</em></p>
+<p><strong>一个不喜欢挑战自己的精灵可能会答道：</strong> <em>很简单，不是么？</em></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">return</span> Thread.getAllStackTraces().size();</div></pre></td></tr></table></figure>
+<p>但是如果把问题改为任意给定类（不限于Thread），如何重新设计我们的方案呢？我们是不是得实现下面这个接口？</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">HeapInsight</span> </span>&#123;</div><div class="line">  <span class="function"><span class="keyword">int</span> <span class="title">countInstances</span><span class="params">(Class klass)</span></span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这不可能吧？如果String.class作为输入参数会怎么样呢？<br>不要害怕，我们只需深入到JVM内部一点。对JVM库开发者来说，可以使用<a href="http://download.oracle.com/javase/8/docs/technotes/guides/jvmti/" target="_blank" rel="external">JVMTI</a>，一个Java虚拟机工具接口（Java Virtual Machine Tool Interface）。JVMTI添加到Java中已经很多年了，很多有意思的工具都使用JVMTI。JVMTI提供了两类接口：</p>
+<ul>
+<li>Native API</li>
+<li>Instrumentation API，用来监控并转换加载到JVM中类的字节码</li>
+</ul>
+<p>在我们的例子中，我们要使用Native API。我们想要用的是<a href="http://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#IterateThroughHeap" target="_blank" rel="external">IterateThroughHeap</a>函数，我们可以提供一个自定义的回调函数，对给定类的每个实例都可以执行回调函数。</p>
+<p>首先，我们先创建一个Native插件，可以加载并显示一些东西，以确保我们的架构没问题。</p>
+<p>Native插件是用C/C++实现的，并编译为一个动态库，它在我们开始考虑Java前就已经被加载了。如果你对C++不熟，没关系，很多精灵都不熟，而且也不难。我写C++时主要有两个策略：靠巧合编程、避免段错误。所以，<strong>当我准备写下本文的代码和说明时，我们都可以练一遍。</strong></p>
+<p>下面就是创建的第一个native插件：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#<span class="meta-keyword">include</span> </span></div><div class="line"><span class="meta">#<span class="meta-keyword">include</span> </span></div><div class="line"> </div><div class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> <span class="built_in">std</span>;</div><div class="line"> </div><div class="line"><span class="function">JNIEXPORT jint JNICALL <span class="title">Agent_OnLoad</span><span class="params">(JavaVM *jvm, <span class="keyword">char</span> *options, <span class="keyword">void</span> *reserved)</span></span></div><div class="line">&#123;</div><div class="line">  <span class="built_in">cout</span> &lt;&lt; <span class="string">"A message from my SuperAgent!"</span> &lt;&lt; <span class="built_in">endl</span>;</div><div class="line">  <span class="keyword">return</span> JNI_OK;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>最重要的部分就是我们根据<a href="http://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#starting" target="_blank" rel="external">动态链接插件的文档</a>声明了一个<code>Agent_OnLoad</code>的函数，</p>
+<p>保存文件为“native-agent.cpp”，接下来让我们把它编译为动态库。</p>
+<p>我用的是OSX，所以我可以使用<code>clang</code>编译。为了节省你google搜索的功夫，下面是完整的命令：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">clang -shared -undefined dynamic_lookup -o agent.so -I /Library/Java/JavaVirtualMachines/jdk1.8.0.jdk/Contents/Home/include/ -I /Library/Java/JavaVirtualMachines/jdk1.8.0.jdk/Contents/Home/include/darwin native-agent.cpp</div></pre></td></tr></table></figure>
+<p>这会生成一个agent.so文件，就是供我们使用的动态库。为了测试它，我们创建一个hello world类。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">package</span> org.shelajev;</div><div class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Main</span> </span>&#123;</div><div class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">       System.out.println(<span class="string">"Hello World!"</span>);</div><div class="line">   &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>当你运行时，使用<code>-agentpath</code>选项正确地指向agent.so文件，你应该可以看到以下输出：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">java -agentpath:agent.so org.shelajev.Main</div><div class="line">A message from my SuperAgent!</div><div class="line">Hello World!</div></pre></td></tr></table></figure>
+<p>做的不错！现在，我们准备让这个插件真正地起作用。首先，我们需要一个<code>jvmtiEnv</code>实例。它可以在<code>Agent_OnLoad</code>执行时通过<code>JavaVM *jvm</code>获得，但之后就不行了。所以我们必须把它保存在一个可全局访问的地方。我们声明了一个全局结构体来保存它。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div></pre></td><td class="code"><pre><div class="line"><span class="meta">#<span class="meta-keyword">include</span> </span></div><div class="line"><span class="meta">#<span class="meta-keyword">include</span> </span></div><div class="line"> </div><div class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> <span class="built_in">std</span>;</div><div class="line"> </div><div class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></div><div class="line"> jvmtiEnv *jvmti;</div><div class="line">&#125; GlobalAgentData;</div><div class="line"> </div><div class="line"><span class="keyword">static</span> GlobalAgentData *gdata;</div><div class="line"> </div><div class="line"><span class="function">JNIEXPORT jint JNICALL <span class="title">Agent_OnLoad</span><span class="params">(JavaVM *jvm, <span class="keyword">char</span> *options, <span class="keyword">void</span> *reserved)</span></span></div><div class="line">&#123;</div><div class="line">  jvmtiEnv *jvmti = <span class="literal">NULL</span>;</div><div class="line">  jvmtiCapabilities capa;</div><div class="line">  jvmtiError error;</div><div class="line">  </div><div class="line">  <span class="comment">// put a jvmtiEnv instance at jvmti.</span></div><div class="line">  jint result = jvm-&gt;GetEnv((<span class="keyword">void</span> **) &amp;jvmti, JVMTI_VERSION_1_1);</div><div class="line">  <span class="keyword">if</span> (result != JNI_OK) &#123;</div><div class="line">    <span class="built_in">printf</span>(<span class="string">"ERROR: Unable to access JVMTI!\n"</span>);</div><div class="line">  &#125;</div><div class="line">  <span class="comment">// add a capability to tag objects</span></div><div class="line">  (<span class="keyword">void</span>)<span class="built_in">memset</span>(capa, <span class="number">0</span>, <span class="keyword">sizeof</span>(jvmtiCapabilities));</div><div class="line">  capa.can_tag_objects = <span class="number">1</span>;</div><div class="line">  error = (jvmti)-&gt;AddCapabilities(capa);</div><div class="line"> </div><div class="line">  <span class="comment">// store jvmti in a global data</span></div><div class="line">  gdata = (GlobalAgentData*) <span class="built_in">malloc</span>(<span class="keyword">sizeof</span>(GlobalAgentData));</div><div class="line">  gdata-&gt;jvmti = jvmti;</div><div class="line">  <span class="keyword">return</span> JNI_OK;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>我们也更新了部分代码，让<code>jvmti</code>实例可以使用对象tag（tag：对象附带一个值，参见<a href="http://docs.oracle.com/javase/7/docs/platform/jvmti/jvmti.html#jvmtiHeapFilter" target="_blank" rel="external">JVMTI文档</a>），因为遍历堆的时候需要这么做。准备都已就绪，我们拥有了已初始化的<code>JVMTI</code>实例。我们通过JNI将它提供给Java代码使用。</p>
+<p>JNI表示<a href="https://docs.oracle.com/javase/8/docs/technotes/guides/jni/" target="_blank" rel="external">Java Native Interface</a>，是在Java应用中调用native代码的标准方式。Java部分相当简单直接，在Main类中添加<code>countInstances</code>方法的定义，如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">package</span> org.shelajev;</div><div class="line"></div><div class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Main</span> </span>&#123;</div><div class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</div><div class="line">       System.out.println(<span class="string">"Hello World!"</span>);</div><div class="line">       <span class="keyword">int</span> a = countInstances(Thread.class);</div><div class="line">       System.out.println(<span class="string">"There are "</span> + a + <span class="string">" instances of "</span> + Thread.class);</div><div class="line">   &#125;</div><div class="line"></div><div class="line">   <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">native</span> <span class="keyword">int</span> <span class="title">countInstances</span><span class="params">(Class klass)</span></span>;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>为了适应native方法，我们必须修改我们的native插件代码。我稍后会解释，现在在其中添加下面的函数定义：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">extern</span> <span class="string">"C"</span></div><div class="line"><span class="function">JNICALL jint <span class="title">objectCountingCallback</span><span class="params">(jlong class_tag, jlong size, jlong* tag_ptr, jint length, <span class="keyword">void</span>* user_data)</span> </span></div><div class="line">&#123;</div><div class="line"> <span class="keyword">int</span>* count = (<span class="keyword">int</span>*) user_data;</div><div class="line"> *count += <span class="number">1</span>; </div><div class="line"> <span class="keyword">return</span> JVMTI_VISIT_OBJECTS;</div><div class="line">&#125;</div><div class="line"> </div><div class="line"><span class="keyword">extern</span> <span class="string">"C"</span></div><div class="line"><span class="function">JNIEXPORT jint JNICALL <span class="title">Java_org_shelajev_Main_countInstances</span><span class="params">(JNIEnv *env, jclass thisClass, jclass klass)</span> </span></div><div class="line">&#123;</div><div class="line"> <span class="keyword">int</span> count = <span class="number">0</span>;</div><div class="line">   jvmtiHeapCallbacks callbacks;</div><div class="line">(<span class="keyword">void</span>)<span class="built_in">memset</span>(&amp;callbacks, <span class="number">0</span>, <span class="keyword">sizeof</span>(callbacks));</div><div class="line">callbacks.heap_iteration_callback = &amp;objectCountingCallback;</div><div class="line"> jvmtiError error = gdata-&gt;jvmti-&gt;IterateThroughHeap(<span class="number">0</span>, klass, &amp;callbacks, &amp;count);</div><div class="line"> <span class="keyword">return</span> count;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这里的<code>Java_org_shelajev_Main_countInstances</code> 方法更有趣，它以<code>Java_</code>开始，接着以<code>_</code>分隔的完整类名称，最后是Java中的方法名。同样不要忘记了<code>JNIEXPORT</code>声明，表示这个方法将要导入到Java世界中。</p>
+<p>在<code>Java_org_shelajev_Main_countInstances</code>函数内部，首先我们声明了<code>objectCountingCallback</code>函数作为回调函数，然后调用<code>IterateThroughHeap</code>函数，它的参数通过Java程序传入。</p>
+<p>注意，我们的native方法是静态的，所以C语言对应的参数是：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">JNIEnv *env, jclass thisClass, jclass klass</div></pre></td></tr></table></figure>
+<p>如果是实例方法的话，参数会有点不一样：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">JNIEnv *env, jobj thisInstance, jclass klass</div></pre></td></tr></table></figure>
+<p>其中<code>thisInstance</code>指向调用Java方法的实例。</p>
+<p>现在直接根据<a href="http://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#jvmtiHeapIterationCallback" target="_blank" rel="external">文档</a>给出<code>objectCountingCallback</code>的定义，主要内容不过是递增一个int变量。</p>
+<p>Boom！搞定了！感谢你的耐心。如果你仍在阅读，可以尝试运行下上述代码。</p>
+<p>重新编译native插件，并运行Main class。我的结果如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">java -agentpath:agent.so org.shelajev.Main</div><div class="line">Hello World!</div><div class="line">There are 7 instances of class java.lang.Thread</div></pre></td></tr></table></figure>
+<p>如果我在main方法中添加一行<code>Thread t = new Thread();</code>，结果就是8个。看上去插件确实起作用了。你的数目肯定会和我不一样，没事，这很正常，因为它要算上统计、编译、GC等线程。</p>
+<p>如果我想知道堆内存中String的数量，只需改变class参数。这是一个真正泛型的解决方案，我想圣诞老人会高兴的。</p>
+<p>你对结果感兴趣的话，我告诉你，结果是2423个String实例。对这么个小程序来说，数量相当大了。</p>
+<p>如果执行：<br><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">return</span> Thread.getAllStackTraces().size();</div></pre></td></tr></table></figure></p>
+<p>结果是5，不是8。因为它没有算上统计线程。还要考虑这种简单的解决方案么？</p>
+<p>现在，通过本文和相关知识的学习，我不敢说你可以开始写自己的JVM监控或增强工具，但这肯定是一个起点。</p>
+<p>在本文中，我们从零开始写了一个Java native插件，编译、加载、并成功运行。这个插件使用<code>JVMTI</code>来深入JVM内部（否则无法做到）。对应的Java代码调用native库并生成结果。</p>
+<p>这是很多优秀的JVM工具经常采用的策略，我希望我已经为你解释清楚了其中的一些技巧。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;好久没更新了，把为&lt;a href=&quot;http://fanyi.jobbole.com/4845/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;伯乐在线&lt;/a&gt;、Importnew翻译的一篇文章发上来吧。&lt;/p&gt;
+&lt;p&gt;原文：&lt;a href=&quot;http:/
+    
+    </summary>
+    
+    
+      <category term="java" scheme="http://yoursite.com/tags/java/"/>
+    
+      <category term="翻译" scheme="http://yoursite.com/tags/%E7%BF%BB%E8%AF%91/"/>
+    
+      <category term="jvm" scheme="http://yoursite.com/tags/jvm/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>社区划分-Laplace矩阵与谱划分算法</title>
+    <link href="http://yoursite.com/2015/01/23/%E7%A4%BE%E5%8C%BA%E5%88%92%E5%88%86-Laplace%E7%9F%A9%E9%98%B5%E4%B8%8E%E8%B0%B1%E5%88%92%E5%88%86%E7%AE%97%E6%B3%95/"/>
+    <id>http://yoursite.com/2015/01/23/社区划分-Laplace矩阵与谱划分算法/</id>
+    <published>2015-01-22T19:59:15.000Z</published>
+    <updated>2017-05-18T08:40:44.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="社区划分"><a href="#社区划分" class="headerlink" title="社区划分"></a>社区划分</h2><p>实际的网络可能有若干个社区组成，社区内部的节点之间连接紧密，但社区之间的连接却比较稀疏。如下图所示，相同颜色的节点连接紧密，不同颜色的节点连接稀疏。同一种颜色的节点可以划分到同一个分区中。</p>
+<p><img src="8c10b6330d2547da8e30c359ce6df.png" alt=""></p>
+<h2 id="Laplace矩阵"><a href="#Laplace矩阵" class="headerlink" title="Laplace矩阵"></a>Laplace矩阵</h2><p>###定义<br>对于一个简单图$G$，它可以用Laplace矩阵$L=(l_{ij})_{n\times n}$来表示（$n$为$G$中节点数）。它的定义如下：</p>
+
+$l_{ij}=\left\{
+\begin{array}{ll}
+deg(v_i) & \textrm{if $i=j$}\\
+-1       & \textrm{if $v_i$ connect to $v_j$}\\
+0        & \textrm{otherwise}
+\end{array}\right.$
+
+<p>也就是说，$L$是一个$n\times n$的矩阵，$n$为图$G$的节点数。对角线上的元素$l_{ii}$的值为节点$v_i$的度。其他位置的元素，如果节点$v_i$与节点$v_j$相连（$i\neq j$），则值为$-1$，否则值为$0$。</p>
+<p>那么矩阵$L$可以表示为：$L=D-A$。矩阵$D$是图$G$的度矩阵，对角线上的元素表示各节点的度，其他元素为$0$。矩阵$A$表示图$G$的邻接矩阵。</p>
+<h3 id="性质"><a href="#性质" class="headerlink" title="性质"></a>性质</h3><ol>
+<li>$L$为实对称矩阵</li>
+<li>对$L$的每行或者每列求和都等于0</li>
+<li>矩阵$L$有一个特征值为0，对应的特征向量为${1,1,\dots ,1}$。（因为$L\cdot\{1,1,\dots ,1\}=0$）</li>
+<li>矩阵$L$的其他特征值均大于$0$。</li>
+</ol>
+<h2 id="谱划分算法"><a href="#谱划分算法" class="headerlink" title="谱划分算法"></a>谱划分算法</h2><p>谱划分算法是利用图的Laplace矩阵的特征值和特征向量对图实现划分的一种算法。<br>从线性空间的角度来理解，矩阵的特征向量可以理解为线性空间中相互正交的“基”（三维空间的三个维度），对应的特征值表示矩阵在各个基上的投影长度，特征值和特征向量唯一地确定了矩阵在线性空间中的位置。</p>
+<h3 id="划分思想"><a href="#划分思想" class="headerlink" title="划分思想"></a>划分思想</h3><p>假设图$G$由完全独立的两个社区组成，也就是说图$G$由两部分组成。那么它的Laplace矩阵经过行列的交换，可以写成一个分块对角阵。主对角线上的两个对角块矩阵正好分别是两个社区自身的Laplace矩阵。</p>
+<p><img src="549f3348fe0162e0eec7c0b74dac2.png" alt=""></p>
+<p>以上图的图$G$为例，它包含两个独立的社区。其Laplace矩阵为：</p>
+
+$L=\left( \begin{array}{cccccc|ccccc}
+ 2 & -1 & -1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+-1 & 5 & -1 & -1 & -1 & -1 & 0 & 0 & 0 & 0 & 0 \\
+-1 &-1 & 5 &-1 &-1 &-1 & 0 & 0 & 0 & 0 & 0 \\
+ 0 & -1 &-1 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+0 &-1 &-1 & 0 & 2 & 0 & 0 & 0 & 0 & 0 & 0\\
+0 &-1 &-1 & 0 & 0 & 2 & 0 & 0 & 0 & 0 & 0\\
+\hline
+ 0 & 0 & 0 & 0 & 0 & 0 & 4 &-1 &-1 &-1 &-1\\
+ 0 & 0 & 0 & 0 & 0 & 0 &-1 & 2 & 0 & 0 &-1\\
+  0 & 0 & 0 & 0 & 0 & 0 &-1 & 0 & 1 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 &-1 & 0 & 0 & 2 &-1\\
+ 0 & 0 & 0 & 0 & 0 & 0 &-1 &-1 & 0 &-1 & 3\\
+\end{array} \right)$
+
+<p>求解矩阵的特征值和特征向量。如下式所示，特征值用$E$表示，特征向量矩阵用$V$表示：</p>
+
+$\left( \begin{array}{c}
+E\\
+\hline
+V\\
+\end{array} \right)=\left( \begin{array}{cccccc|ccccc}
+-0. & 2. & 6. & 6. & 2. & 2. & 5. & 0. & 4. & 2. & 1.\\
+\hline
+-0.408 & -0.866 & -0.289 & -0.144 & -0. & -0. & 0. & 0. & 0. & 0. & 0.\\
+ -0.408 & -0. &  0.577 & 0.901 & 0. &    0. &    0.  &   0. &    0. &    0. &    0.\\
+ -0.408 & -0. &    0.577 & -0.324 & -0. &   -0. &    0. &    0. &    0. &    0. &    0.\\
+ -0.408 & 0.289 &-0.289 &-0.144 &-0.  &  -0.73 &  0.  &   0.  &   0. &    0.  &   0.\\
+ -0.408 & 0.289 &-0.289 &-0.144 &-0.707 & 0.049 & 0.  &   0.  &   0. &    0.  &   0.\\
+ -0.408 &  0.289 & -0.289 & -0.144 & 0.707 & 0.681 & 0. &    0.  &   0. &    0. &    0.\\
+  0. &    0. &    0.  &   0.  &   0.  &   0.  &   0.894 & -0.447 & -0.  &   0. &    0.\\
+  0.  &   0.  &   0.  &   0.   &  0.  &   0.    &-0.224 &-0.447 &-0.408 & 0.707 &-0.289\\
+  0.  &   0.  &   0.  &   0.   &  0.  &   0.  &  -0.224 &-0.447 &-0.    &-0.   &  0.866\\
+  0.  &   0.  &   0.  &   0.   &  0.  &   0.  &  -0.224 &-0.447 &-0.408 &-0.707 &-0.289\\
+  0.  &   0.  &   0.  &   0.  &   0.  &   0.  &  -0.224 &-0.447 & 0.816 & 0. &   -0.289\\
+\end{array} \right)$
+
+<p>特征向量矩阵也是分块的形式，子块分别对应于每个社区的特征向量矩阵。此时，特征值0对应的特征向量有两个，分别对应于两个社区。所以Laplace矩阵中，特征值0对应的特征向量的个数，表示图$G$非联通分区的个数，对应于我们例子中的两个独立的社区。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;社区划分&quot;&gt;&lt;a href=&quot;#社区划分&quot; class=&quot;headerlink&quot; title=&quot;社区划分&quot;&gt;&lt;/a&gt;社区划分&lt;/h2&gt;&lt;p&gt;实际的网络可能有若干个社区组成，社区内部的节点之间连接紧密，但社区之间的连接却比较稀疏。如下图所示，相同颜色的节点连接紧密，
+    
+    </summary>
+    
+    
+      <category term="算法" scheme="http://yoursite.com/tags/%E7%AE%97%E6%B3%95/"/>
+    
+      <category term="图论" scheme="http://yoursite.com/tags/%E5%9B%BE%E8%AE%BA/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>ServiceLoader的使用</title>
+    <link href="http://yoursite.com/2015/01/14/ServiceLoader%E7%9A%84%E4%BD%BF%E7%94%A8/"/>
+    <id>http://yoursite.com/2015/01/14/ServiceLoader的使用/</id>
+    <published>2015-01-14T07:51:16.000Z</published>
+    <updated>2017-05-18T07:37:46.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>ServiceLoader是Java SE 6所提供的API，用于自动实例化继承了给定接口（或抽象类）的类，类似于Spring依赖注入的功能。</p>
+<p>根据其官方文档，对于ServiceLoader来说，有两个概念需要弄清楚： </p>
+<ul>
+<li>service：指已定义好的接口或者抽象类</li>
+<li>service provider：指实现了特定service的具体类</li>
+</ul>
+<p>ServiceLoader是一个泛型类，它的类型参数就表示service，需要实例化类型的超类（接口或抽象类）。</p>
+<p>那么，需要实例化哪些provider呢，也就是继承了service的具体类？这需要在resource路径下的<code>META-INF/services</code>目录中定义一个配置文件。<br>这个配置文件的名称必须用service的绝对包路径来命名。文件的内容就是需要被实例化的provider：一行一个，必须是provider的绝对包路径。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;ServiceLoader是Java SE 6所提供的API，用于自动实例化继承了给定接口（或抽象类）的类，类似于Spring依赖注入的功能。&lt;/p&gt;
+&lt;p&gt;根据其官方文档，对于ServiceLoader来说，有两个概念需要弄清楚： &lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;servic
+    
+    </summary>
+    
+    
+      <category term="java" scheme="http://yoursite.com/tags/java/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Floodlight源码分析（1）</title>
+    <link href="http://yoursite.com/2015/01/13/Floodlight%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%EF%BC%881%EF%BC%89/"/>
+    <id>http://yoursite.com/2015/01/13/Floodlight源码分析（1）/</id>
+    <published>2015-01-13T14:10:22.000Z</published>
+    <updated>2017-05-18T07:33:52.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h2><p>在详细分析模块加载过程之前，先了解几个核心概念。</p>
+<h3 id="1-模块-Module"><a href="#1-模块-Module" class="headerlink" title="1.模块(Module)"></a>1.模块(Module)</h3><p>Module是指继承了IFloodlightModule接口的类。IFloodlightModule定义如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line">public interface IFloodlightModule &#123;</div><div class="line">    //获取module包含的service</div><div class="line">    public Collection&lt;Class&lt;? extends IFloodlightService&gt;&gt; getModuleServices();</div><div class="line">    </div><div class="line">    public Map&lt;Class&lt;? extends IFloodlightService&gt;,</div><div class="line">               IFloodlightService&gt; getServiceImpls(); </div><div class="line">	//获取module依赖service</div><div class="line">    public Collection&lt;Class&lt;? extends IFloodlightService&gt;&gt; getModuleDependencies();</div><div class="line">    </div><div class="line">    void init(FloodlightModuleContext context) throws FloodlightModuleException;</div><div class="line">    </div><div class="line">    void startUp(FloodlightModuleContext context) </div><div class="line">            throws FloodlightModuleException; </div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>我们知道，在Java中，一个类，可以有多个实例。但在Floodlight系统中，每个Module类只包含一个module实例。Module类通过<a href="/serviceloaderde-shi-yong/">ServiceLoader</a>只实例化一个module实例，类似于Spring框架的功能，详见3.2.2节。</p>
+<p><em>（约定：以下内容中，首字母大写的Module表示类，小写的module表示实例）</em></p>
+<h3 id="2-服务-Service"><a href="#2-服务-Service" class="headerlink" title="2.服务(Service)"></a>2.服务(Service)</h3><p>Service是指继承了IFloodlightService接口的类。IFloodlightService定义如下，是一个空接口，保证类型安全：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">public abstract interface IFloodlightService &#123;</div><div class="line">    // This space is intentionally left blank....don&apos;t touch it</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="3-配置需要启动的Module"><a href="#3-配置需要启动的Module" class="headerlink" title="3.配置需要启动的Module"></a>3.配置需要启动的Module</h3><p>Floodlight从命令行启动的时候，可以加上配置文件参数（见第2节）；如果没有添加，则启动默认的配置文件。</p>
+<p>可以在这个配置文件中定义一个Module列表，这些Module在Floodlight运行的时候自动启动。</p>
+<h3 id="4-Module与Service的关系"><a href="#4-Module与Service的关系" class="headerlink" title="4.Module与Service的关系"></a>4.Module与Service的关系</h3><ol>
+<li>一个Module可以包含多个Service。</li>
+<li>一个Service也可以被多个Module包含。</li>
+<li>但是，对于定义在配置文件（见3.2.1）中将要启动的Module，任意两个Module不能包含相同的Service。</li>
+</ol>
+<p>总结一下：Module和Service可以是Many-to-Many的关系；但是对于定义在配置文件中的所有Module，是one-to-Many的关系。</p>
+<h3 id="5-依赖关系"><a href="#5-依赖关系" class="headerlink" title="5.依赖关系"></a>5.依赖关系</h3><p>一个Module可能依赖于多个Service，通过调用getModuleDependencies方法获取module实例所依赖的Service。</p>
+<p>定义在配置文件的Module在启动前，程序会解决依赖问题。如果一个Module依赖一个Service，那么程序会加载包含这个Service的Module解决依赖。如果包含这个Service的Module有多个，那么必须选一个，显式写在配置文件中。</p>
+<hr>
+<h2 id="Main函数"><a href="#Main函数" class="headerlink" title="Main函数"></a>Main函数</h2><p>main函数很简单（除去注释、空行，只有十几行），也很容易理解，主要包括以下几部分内容：</p>
+<ol>
+<li>解析命令行参数</li>
+<li>加载自定义模块</li>
+<li>启动REST服务器</li>
+<li>启动Controller</li>
+</ol>
+<p>这几部分在接下来的几节中详细论述。</p>
+<hr>
+<h2 id="命令行参数解析"><a href="#命令行参数解析" class="headerlink" title="命令行参数解析"></a>命令行参数解析</h2><p>程序使用CmdLineParser解析命令参数。CmdLineSetting定义了命令行参数的格式：<code>-cf[--configFile] FILE</code>，用来通过命令行传入配置文件路径。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line">@Option(name=&quot;-cf&quot;, aliases=&quot;--configFile&quot;, metaVar=&quot;FILE&quot;, usage=&quot;Floodlight configuration file&quot;)</div><div class="line">private String configFile = DEFAULT_CONFIG_FILE;</div></pre></td></tr></table></figure>
+<p>默认情况下，配置文件路径为“config/floodlight.properties”。</p>
+<hr>
+<h2 id="FloodlightModuleLoader"><a href="#FloodlightModuleLoader" class="headerlink" title="FloodlightModuleLoader"></a>FloodlightModuleLoader</h2><p>从主函数可以看到，它实例化了FloodlightModuleLoader，用来加载模块，而这个类也继承了IFloodlightService接口，所以它可以看作是一种特殊的Service，用来加载Module的Service。</p>
+<p>在详细说明FloodlightModuleLoader功能之前，我先介绍一下它内部的几个静态成员变量：</p>
+<ul>
+<li>serviceMap：Service<strong>类型</strong>与所属的多个modules<strong>实例</strong>的映射关系</li>
+<li>moduleService：module<strong>实例</strong>与包含的Services<strong>类型</strong>的映射关系</li>
+<li>moduleNameMap：Module名称与module<strong>实例</strong>的映射关系</li>
+</ul>
+<p>FloodlightModuleLoader主要做了三件事（loadModulesFromConfig方法）：</p>
+<ol>
+<li>解析配置文件，读取其中的Module名称（用于第三步启动）</li>
+<li>利用ServiceLoader实例化所有Module</li>
+<li>对于2中的所有实例，只启动配置文件所定义的类型</li>
+</ol>
+<h3 id="1-解析配置文件"><a href="#1-解析配置文件" class="headerlink" title="1.解析配置文件"></a>1.解析配置文件</h3><p>参见loadModulesFromConfig方法。<br>配置文件是Properties文件，以等号（“=”）分隔属性名和属性值，使用<code>java.util.Properties</code>就可以解析。</p>
+<ul>
+<li>“floodlight.modules”属性对应的值是以逗号分隔的Module类名字符串。这表示要启动的多个模块。</li>
+<li>“floodlight.confd”属性对应的值是子配置文件目录。这个目录可以包含多个子配置文件，每个文件中也可以包含“floodlight.modules”属性，对应的以逗号分隔Module名也需要被启动。</li>
+</ul>
+<p>第1步：将“floodlight.modules”属性定义的多个Module类名，存放到列表中<br>第2步：如果有“floodlight.confd”属性，解析对应的子配置文件目录，递归解析所有的子配置文件<br>第3步：返回结果列表</p>
+<h3 id="2-实例化所有Module"><a href="#2-实例化所有Module" class="headerlink" title="2.实例化所有Module"></a>2.实例化所有Module</h3><p>这部分的内容主要包含在findAllModules方法中。</p>
+<p>ServiceLoader是Java SE 6所提供的API，用于自动实例化继承了给定接口（或抽象类）的类，类似于Spring依赖注入的功能。<br>ServiceLoader的使用请参见<a href="/serviceloaderde-shi-yong/">《ServiceLoader的使用》</a></p>
+<p>ServiceLoader为<code>resource/META-INF/services/net.floodlightcontroller.core.module.IFloodlightModule</code>文件中定义的所有类都创建了一个实例。这些类全部实现了IFloodlightModule，所以可以这么说，ServiceLoader为这个文件中所有的Module创建了一个实例。</p>
+<p>然后更新serviceMap、moduleService和moduleNameMap这三个静态变量。</p>
+<p>最后，检查配置文件中包含的Module类，是否存在两个以上的Module包含相同的service，否则抛出异常。</p>
+<h3 id="3-启动配置文件定义的Module"><a href="#3-启动配置文件定义的Module" class="headerlink" title="3.启动配置文件定义的Module"></a>3.启动配置文件定义的Module</h3><p>这部分内容主要在loadModulesFromList方法中。主要过程为：</p>
+<ol>
+<li>将需启动的Module实例加入到启动列表中</li>
+<li>将依赖的Module实例加入启动列表中（递归添加依赖Module）</li>
+<li>启动上述列表中的所有实例</li>
+</ol>
+<p>从“解析配置文件”小节中已知道，解析配置文件后，返回一个列表（<code>Collection&lt;String&gt;</code>），其中包含要启动的Module名称。接下来，循环迭代这个列表，根据Module名称从moduleNameMap中获取对应的module实例。然后把这个实例添加到启动列表中。</p>
+<p>如果这个module实例依赖于其他一个或多个Service，那么需要解决依赖，将包含这些Service的module实例也添加到启动列表。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;基本概念&quot;&gt;&lt;a href=&quot;#基本概念&quot; class=&quot;headerlink&quot; title=&quot;基本概念&quot;&gt;&lt;/a&gt;基本概念&lt;/h2&gt;&lt;p&gt;在详细分析模块加载过程之前，先了解几个核心概念。&lt;/p&gt;
+&lt;h3 id=&quot;1-模块-Module&quot;&gt;&lt;a href=&quot;#1-
+    
+    </summary>
+    
+    
+      <category term="java" scheme="http://yoursite.com/tags/java/"/>
+    
+      <category term="sdn" scheme="http://yoursite.com/tags/sdn/"/>
+    
+      <category term="floodlight" scheme="http://yoursite.com/tags/floodlight/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>使用Java反射解析JSON配置文件</title>
+    <link href="http://yoursite.com/2015/01/06/%E4%BD%BF%E7%94%A8Java%E5%8F%8D%E5%B0%84%E8%A7%A3%E6%9E%90JSON%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6/"/>
+    <id>http://yoursite.com/2015/01/06/使用Java反射解析JSON配置文件/</id>
+    <published>2015-01-06T13:30:59.000Z</published>
+    <updated>2017-05-18T07:31:20.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="什么是JSON"><a href="#什么是JSON" class="headerlink" title="什么是JSON"></a>什么是JSON</h2><p>JSON(JavaScript Object Notation)是指Javascript对象表示法。JSON是Javascript的一个子集，但JSON是一种独立的文本格式，用来存储和交换文本信息的语法。类似 XML。详细介绍可以参见<a href="http://www.json.org/json-zh.html" target="_blank" rel="external">介绍JSON</a>。</p>
+<p>对于动态语言比如Javascript、Python来说，解析JSON属于小菜一碟；但对于静态强类型语言来说，解析JSON要费点功夫。尽管Java解析JSON比较麻烦，幸运的是，Java已经有很多强大的JSON解析器。</p>
+<h2 id="解析工具"><a href="#解析工具" class="headerlink" title="解析工具"></a>解析工具</h2><p>本文使用org.json来解析JSON数据。org.json是非常轻量级的JSON解析器，不依赖于其他库。</p>
+<p>JSON有两种数据类型：对象和数组。</p>
+<ul>
+<li>对象：通过花括号包含的键/值对</li>
+<li>数组：通过方括号包含的有序列表</li>
+</ul>
+<p>这两种类型分别对应于org.json的JSONObject和JSONArray。</p>
+<h2 id="解析思路"><a href="#解析思路" class="headerlink" title="解析思路"></a>解析思路</h2><p>需求：将配置文件中的JSON字符串转换为某个实例（比如自定义的Config类或Map）。</p>
+<p>分析：  </p>
+<ol>
+<li>生成的“某个实例”到底是哪一个呢？可以增加一个输入参数<code>Class&lt;?&gt;</code>，表示生成实例的类型。</li>
+<li>如果指定的类型不是Map，那么这个类型必须要包含JSON所有键所对应的域。比如JSON对象为<code>{&quot;name&quot; : &quot;Tim&quot;, &quot;age&quot; : 20}</code>，那么指定的类型必须包含String类型的name域和数值类型的age域。</li>
+</ol>
+<ul>
+<li>输入：1. JSON字符串或者代表JSON字符串的JSONObject；2. <code>Class&lt;?&gt;</code>表示生成实例的类型</li>
+<li>输出：对应的实例</li>
+</ul>
+<h3 id="第1步"><a href="#第1步" class="headerlink" title="第1步"></a>第1步</h3><p>如果定义一个函数<code>json2obj</code>来操作，函数的返回类型与<code>Class&lt;?&gt;</code>输入参数有关，不是固定的，所以可以采用泛型。那么<code>json2obj</code>的框架可以这么写：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">public &lt;T&gt; T json2obj(JSONObject json, Class&lt;T&gt; Cls) &#123;</div><div class="line">	...</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="第2步"><a href="#第2步" class="headerlink" title="第2步"></a>第2步</h3><p>现在可以想一个大致的步骤了：如果指定的类型是Map或其子类，那么就将JSON转化为Map实例（JSON的键/值对可以对应于Map的键/值对）；否则，根据Class参数生成对应实例，将JSON中的键/值对填入到该实例对应的域中，这显然得用到反射。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line">public &lt;T&gt; T json2obj(JSONObject json, Class&lt;T&gt; Cls) &#123;</div><div class="line">	if (Map.class.isAssignableFrom(Cls)) &#123;</div><div class="line">    	T map = 解析json到map;</div><div class="line">		return map;</div><div class="line">    &#125;</div><div class="line">    T res = Cls.newInstance();</div><div class="line">    Iterator&lt;String&gt; iter = json.keys();</div><div class="line">    while (iter.hasNext()) &#123;</div><div class="line">		key = iter.next();</div><div class="line">		value = json.get(key);</div><div class="line">        设置res对应于key的域</div><div class="line">    &#125;</div><div class="line">    return res</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="第3步"><a href="#第3步" class="headerlink" title="第3步"></a>第3步</h3><p>先将JSON转化为Map实例，这个比较容易：定义一个新的函数<code>json2map</code>，将JSON的键值对逐个填入到map实例中，并修改原来的<code>json2obj</code>函数。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div></pre></td><td class="code"><pre><div class="line">private Map&lt;String, Object&gt; json2map(JSONObject json,</div><div class="line">			Class&lt;Map&lt;String, Object&gt;&gt; mapCls) &#123;</div><div class="line">	Map&lt;String, Object&gt; map = mapCls.newInstance();</div><div class="line">	Iterator&lt;String&gt; iter = json.keys();</div><div class="line">	String key;</div><div class="line">	while (iter.hasNext()) &#123;</div><div class="line">		key = iter.next();</div><div class="line">		map.put(key, json.get(key));</div><div class="line">	&#125;</div><div class="line">	return map;</div><div class="line">&#125;</div><div class="line"></div><div class="line">public &lt;T&gt; T json2obj(JSONObject json, Class&lt;T&gt; Cls) &#123;</div><div class="line">	if (Map.class.isAssignableFrom(Cls)) &#123;</div><div class="line">    	return (T)json2map(json, (Class&lt;Map&lt;String, Object&gt;&gt;) Cls);</div><div class="line">    &#125;</div><div class="line">    T res = Cls.newInstance();</div><div class="line">    Iterator&lt;String&gt; iter = json.keys();</div><div class="line">    while (iter.hasNext()) &#123;</div><div class="line">		key = iter.next();</div><div class="line">		value = json.get(key);</div><div class="line">        设置res对应于key的域</div><div class="line">    &#125;</div><div class="line">    return res</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="第4步"><a href="#第4步" class="headerlink" title="第4步"></a>第4步</h3><p>现在考虑普通实例的转换。如果key对应的value是普通类型，即字符串或数值，那么直接把值填写到对应的域中即可；如果value是对象（JSONObject），那么把value转化为对应域类型的实例，递归地调用json2obj函数。</p>
+<p>接下来设置key对应的域：如果这个域是public的，直接设置；否则通过对应的setter方法设置。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line">   ...</div><div class="line">while (iter.hasNext()) &#123;</div><div class="line">key = iter.next();</div><div class="line">value = json.get(key);</div><div class="line">      Field field = Cls.getDeclaredField(key);</div><div class="line">// recursion</div><div class="line">if (value instanceof JSONObject)</div><div class="line">	value = json2obj((JSONObject) value, field.getType());</div><div class="line">      if (Modifier.isPublic(field.getModifiers())) &#123;</div><div class="line">	field.setAccessible(true);</div><div class="line">	field.set(res, value);</div><div class="line">&#125; else &#123; // not accessible, use setter method</div><div class="line">	String methodName = &quot;set&quot; + Character.toUpperCase(key.charAt(0)) + key.substring(1);</div><div class="line">	Method setMethod = Cls.getMethod(methodName, field.getType());</div><div class="line">	setMethod.invoke(res, value);</div><div class="line">&#125;</div><div class="line">  &#125;</div><div class="line">   ...</div></pre></td></tr></table></figure>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文主要通过反射将JSON转化为Java实例，实例类型由输入参数<code>Class&lt;T&gt; Cls</code>决定，可以是Map类或者普通类。如果Java类是普通类，必须包含JSON对象所有键（key）所对应的同名同类型域，且可设置（public或者setter方法）。比如JSON包含名为”name”的key，那么Java类也应该包含name的域。JSON对象内也可以包含JSON对象，Java类内部也必须包含其他Java类型的域。程序通过递归的方式解析。</p>
+<p>本文没有考虑JSON数组的转化。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;什么是JSON&quot;&gt;&lt;a href=&quot;#什么是JSON&quot; class=&quot;headerlink&quot; title=&quot;什么是JSON&quot;&gt;&lt;/a&gt;什么是JSON&lt;/h2&gt;&lt;p&gt;JSON(JavaScript Object Notation)是指Javascript对象表示法。
+    
+    </summary>
+    
+    
+      <category term="java" scheme="http://yoursite.com/tags/java/"/>
+    
+      <category term="反射" scheme="http://yoursite.com/tags/%E5%8F%8D%E5%B0%84/"/>
+    
+      <category term="json" scheme="http://yoursite.com/tags/json/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>社区划分-Newman快速算法</title>
+    <link href="http://yoursite.com/2014/12/27/%E7%A4%BE%E5%8C%BA%E5%88%92%E5%88%86-Newman%E5%BF%AB%E9%80%9F%E7%AE%97%E6%B3%95/"/>
+    <id>http://yoursite.com/2014/12/27/社区划分-Newman快速算法/</id>
+    <published>2014-12-27T09:08:41.000Z</published>
+    <updated>2017-05-18T07:29:10.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="回顾"><a href="#回顾" class="headerlink" title="回顾"></a>回顾</h2><p>在<a href="/2014/12/10/Modularity/">上一篇文章</a>中，我们了解了模块度的定义与计算方法。因为Newman快速算法是通过最优化Modularity的值来实现社区划分的，所以先回顾下Modularity的计算方法。我们最后得到的Modularity计算公式为：</p>
+
+$$Q=\sum_i^c(e_{ii}-a_{i}^2)$$
+
+<p>其中：   </p>
+<ul>
+<li>c表示社区数</li>
+<li>$e_{ij}+e_{ji}$表示连接社区i和社区j边的概率，$e_{ij}=e_{ji}$分别为概率的一半。</li>
+<li>$e_{ii}$表示在社区i内边的概率。</li>
+<li>$a_i=\sum_j{e_{ij}}$表示在端点在社区i中的概率。</li>
+</ul>
+<p>如果端点之间随机连接，也就是在随机情况下，社区i内部边的概率为$a_{ii}^2$。</p>
+<p>Modularity用来评价社区划分结果的好坏，Q值越大，划分结果越好。如果一个图是随机的，那么它的模块度应该为0。</p>
+<h2 id="思想"><a href="#思想" class="headerlink" title="思想"></a>思想</h2><p>既然Modularity可以用来评价社区划分结果的好坏，那么是不是可以设计一个算法，直接以Modularity为优化目标，实现社区划分。</p>
+<p>这一优化问题的解空间有多大呢？简单计算下，假设有n个节点。</p>
+<ul>
+<li>如果划分为一个社区，那个只有1个解：所有节点都属于这个社区；</li>
+<li>如果划分为两个社区，那么每个节点有两种选择：要么属于第一个社区，要么属于第二个社区，总共$2^n$种选择。但划分的结果，即两个社区，是没有顺序的，需要除以2，还得减去把所有节点都分到一个社区的情况，即$2^{n-1}-1$种解。</li>
+</ul>
+<p>仅仅这两种情况，解空间就随n呈指数增长，这个问题显然是NP-hard问题。</p>
+<p>Newman快速算法是凝聚式的贪心算法。所谓凝聚，就是算法先将各个节点初始化为单个分区，然后逐步将关联度高的分区合并到一起，最后形成大的划分方案。在合并的过程中，每一步选择两个分区合并，使得合并后使Q增长最大（或者减小最小）。</p>
+<p>社区i和社区j合并前：</p>
+
+$$\begin{aligned}
+Q_{before}
+&=\sum_{k\neq i,j}^c(e_{kk}-a_{k}^2)+(e_{ii}-a_{i}^2)+(e_{jj}-a_{j}^2)\\
+&=Q'+(e_{ii}-a_{i}^2)+(e_{jj}-a_{j}^2)
+\end{aligned}$$
+
+<p>合并后，假设合并后为社区z：</p>
+$$Q_{after}=Q'+(e_{zz}-a_{z}^2)$$
+<p>其中：</p>
+<ul>
+<li>$e_{zz}=e_{ii}+e_{jj}+e_{ij}+e_{ji}$，原来在连接社区i和社区j的边现在也属于社区z内部了。</li>
+<li>$a_{z}=a_i+a_j$</li>
+</ul>
+<p>那么合并后，Modularity的增量$\Delta Q$：</p>
+
+$$\begin{split}
+\Delta Q &=Q_{after}-Q_{before}\\
+&=e_{ij}+e_{ji}-2a_i a_j\\
+&=2(e_{ij}-a_i a_j)
+\end{split}$$
+
+<p>根据$\Delta Q$的计算方式，我们只需要维护一个$e_{ij}$矩阵就可以计算出合并任意两个社区后的Modularity变化量，而不用计算Q。选择使Modularity增量最大的两个社区进行合并。<br>合并社区i和社区j后，需要更新矩阵，只需要社区i和社区j对应的行相加、对应的列相加即可。</p>
+<h2 id="例子"><a href="#例子" class="headerlink" title="例子"></a>例子</h2><p>将该算法应用在著名的Zachary空手道俱乐部关系网络中。该俱乐部后来产生分歧，分裂为两个小俱乐部。</p>
+<ul>
+<li>当Q值达到最大时，为Q=0.381，网络被划分为三个社区，如下图所示：</li>
+</ul>
+<p><img src="39007d5ed2635551666e950bedb1f.png" alt=""></p>
+<ul>
+<li>当网络被划分为两个社区时，Q=0.372。与实际情况对比，只有节点10未被划分正确。</li>
+</ul>
+<p><img src="92e3040c4f5a7e83209a77a8f797c.png" alt=""></p>
+<h2 id="代码"><a href="#代码" class="headerlink" title="代码"></a>代码</h2><figure class="highlight python"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div><div class="line">48</div><div class="line">49</div><div class="line">50</div><div class="line">51</div><div class="line">52</div><div class="line">53</div><div class="line">54</div><div class="line">55</div><div class="line">56</div><div class="line">57</div><div class="line">58</div><div class="line">59</div><div class="line">60</div></pre></td><td class="code"><pre><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">newman_partition</span><span class="params">(graph, n_groups=<span class="number">1</span>, min_delta_q=<span class="number">0</span>, weight=None)</span>:</span></div><div class="line">    <span class="string">"""</span></div><div class="line">    partition a graph according its structure</div><div class="line">    :param graph: undirected networkx graph</div><div class="line">    :param n_groups: number of groups would be partitioned</div><div class="line">    :param min_delta_q: stop condition: if the increased 'q' (modularity) by joining two partitions was less than min_delta_q</div><div class="line">    :param weight: key value for edge dict</div><div class="line">    :return: a list of sets each of which contains the nodes belong to the same partition </div><div class="line">    """</div><div class="line">    m = graph.number_of_edges()</div><div class="line">    p_id = <span class="number">1</span></div><div class="line">    groups, a = &#123;&#125;, &#123;&#125;</div><div class="line">    q, total_weight = <span class="number">0</span>, <span class="number">0</span></div><div class="line"></div><div class="line">    <span class="keyword">for</span> edge <span class="keyword">in</span> graph.edges():</div><div class="line">        total_weight += graph[edge[<span class="number">0</span>]][edge[<span class="number">1</span>]].get(weight, <span class="number">1</span>)</div><div class="line"></div><div class="line">    <span class="keyword">for</span> node <span class="keyword">in</span> graph.nodes():</div><div class="line">        groups[p_id] = (node, )</div><div class="line">        a[p_id] = graph.degree(node, weight)/<span class="number">2</span>/total_weight</div><div class="line">        q -= a[p_id]**<span class="number">2</span></div><div class="line">        p_id += <span class="number">1</span></div><div class="line"></div><div class="line">    e = defaultdict(dict)</div><div class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> range(<span class="number">1</span>,len(groups)+<span class="number">1</span>):</div><div class="line">        <span class="keyword">for</span> j <span class="keyword">in</span> range(i, len(groups)+<span class="number">1</span>):</div><div class="line">            <span class="keyword">if</span> groups[j][<span class="number">0</span>] <span class="keyword">in</span> graph[groups[i][<span class="number">0</span>]]:</div><div class="line">                e[i][j] = graph[groups[i][<span class="number">0</span>]][groups[j][<span class="number">0</span>]].get(weight, <span class="number">1</span>)/<span class="number">2</span>/total_weight</div><div class="line">                e[j][i] = e[i][j]</div><div class="line"></div><div class="line">    <span class="keyword">while</span> <span class="keyword">True</span>:</div><div class="line">        delta_q = <span class="number">-9999999</span></div><div class="line">        merge = <span class="keyword">None</span></div><div class="line">        <span class="keyword">for</span> (i, j) <span class="keyword">in</span> combinations(groups.keys(), <span class="number">2</span>):</div><div class="line">            <span class="keyword">if</span> j <span class="keyword">in</span> e[i] <span class="keyword">and</span> i <span class="keyword">in</span> e[j]:</div><div class="line">                tmp = e[i][j] + e[j][i] - <span class="number">2</span> * a[i]*a[j]</div><div class="line">                delta_q, merge = (tmp, (i, j)) <span class="keyword">if</span> tmp &gt; delta_q <span class="keyword">else</span> (delta_q, merge)</div><div class="line">        <span class="comment">#join</span></div><div class="line">        i, j = merge</div><div class="line">        adjs = set(e[i].keys() + e[j].keys())</div><div class="line">        adjs.remove(i)</div><div class="line">        adjs.remove(j)</div><div class="line">        <span class="keyword">for</span> k <span class="keyword">in</span> adjs:</div><div class="line">            e[p_id][k] = e[i].get(k, <span class="number">0</span>) + e[j].get(k, <span class="number">0</span>)</div><div class="line">            e[k][p_id] = e[k].get(i, <span class="number">0</span>) + e[k].get(j, <span class="number">0</span>)</div><div class="line">            <span class="keyword">if</span> i <span class="keyword">in</span> e[k]:</div><div class="line">                <span class="keyword">del</span> e[k][i]</div><div class="line">            <span class="keyword">if</span> j <span class="keyword">in</span> e[k]:</div><div class="line">                <span class="keyword">del</span> e[k][j]</div><div class="line">        <span class="keyword">del</span> e[i], e[j]</div><div class="line">        a[p_id] = a[i] + a[j]</div><div class="line">        groups[p_id] = groups[i] + groups[j]</div><div class="line">        <span class="keyword">del</span> groups[i], groups[j]</div><div class="line">        <span class="keyword">del</span> a[i], a[j]</div><div class="line">        p_id += <span class="number">1</span></div><div class="line">        q += delta_q</div><div class="line"></div><div class="line">        <span class="keyword">if</span> delta_q &lt; min_delta_q <span class="keyword">or</span> len(groups) &lt;= n_groups:</div><div class="line">            <span class="keyword">break</span></div><div class="line">    <span class="keyword">return</span> (set(value) <span class="keyword">for</span> value <span class="keyword">in</span> groups.values())</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;回顾&quot;&gt;&lt;a href=&quot;#回顾&quot; class=&quot;headerlink&quot; title=&quot;回顾&quot;&gt;&lt;/a&gt;回顾&lt;/h2&gt;&lt;p&gt;在&lt;a href=&quot;/2014/12/10/Modularity/&quot;&gt;上一篇文章&lt;/a&gt;中，我们了解了模块度的定义与计算方法。因为Newma
+    
+    </summary>
+    
+    
+      <category term="算法" scheme="http://yoursite.com/tags/%E7%AE%97%E6%B3%95/"/>
+    
+      <category term="图论" scheme="http://yoursite.com/tags/%E5%9B%BE%E8%AE%BA/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>社区划分评价指标-Modularity</title>
+    <link href="http://yoursite.com/2014/12/10/Modularity/"/>
+    <id>http://yoursite.com/2014/12/10/Modularity/</id>
+    <published>2014-12-10T07:27:21.000Z</published>
+    <updated>2017-05-18T07:21:20.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="作用"><a href="#作用" class="headerlink" title="作用"></a>作用</h2><p>随着人们对网络的深入研究，在现实中的很多场景中，网络会具有一定的社区结构，比如社交网络、计算机网络。根据网络的结构，网络可以划分为不同的社区，社区内的节点连接紧密，社区之间的节点连接稀疏。比如下图的网络结构。</p>
+<p><img src="8c10b6330d2547da8e30c359ce6df.png" alt=""></p>
+<p>很多研究人员提出了各种社区划分算法，比如基于特征值的谱划分法、基于介数或中心度的凝聚或分裂类算法。对于相同的数据，不同的算法可能会得到不同的结果。那么如何评价某一算法的划分结果的好坏呢？模块度（Modularity）就是用来评价一个划分结果的量。</p>
+<h2 id="定义"><a href="#定义" class="headerlink" title="定义"></a>定义</h2><p>模块度是指落在社区内链路的比例减去链路是随机分布的情形下落在社区内比例。<br>感觉很拗口，下面详细说明。</p>
+<p>首先定义几个符号：</p>
+<ol>
+<li>图$G(V,E)$包含n个顶点、m条链路，即$|V|=n,|E|=m$</li>
+<li>用$\delta_{vw}$表示节点v、w是否在同一社区中：等于1，表示v、w在同一社区中；等于0，表示v、w在不同社区中。</li>
+<li>矩阵$A$表示图G的邻接矩阵，<span>$A_{vw}=0$</span><!-- Has MathJax -->表示节点v、w之间没有链路，$A_{vw}=1$表示v、w之间存在链路。</li>
+<li>$k_v$表示节点v的度</li>
+</ol>
+<ul>
+<li>计算社区内链路数目<br>可以很容易地写出，社区内链路数目为：</li>
+</ul>
+
+$$1/2\sum_{vw}A_{vw}\cdot \delta_{vw}$$
+
+<ul>
+<li>链路随机分布的情况<br>保持原来节点的度不变的情况下（每个节点连接的链路总数不变），但所有链路随机连接到其他节点。   </li>
+</ul>
+<p>再详细一点：  </p>
+<ol>
+<li>将原图$G$中的每条链路从中间断开，形成两个stub（那么节点v拥有$k_v$个stub，$k_v$为节点v的度）。</li>
+<li>现在整个图有$2m$个stub。</li>
+<li>让stub之间随机连接（单个节点上可能出现环），每个stub只能连接一条链路</li>
+<li>这样生成新的图$G’$，其中每个节点的度与原图是一样的。</li>
+</ol>
+<p>那么链路随机分布的情况下，节点v、w之间的链路期望数目为：<span>$\frac{k_v k_w}{2m}$</span><!-- Has MathJax --></p>
+<p>随机情况下，社区内链路期望数目为：</p>
+<p>$$1/2\sum_{vw}\frac{k_v k_w}{2m}$$</p>
+<p>将两种情况的社区内链路数目相减，并除以总链路数就得到了Modularity：</p>
+
+$$Q=\frac{1}{2m}\sum_{vw}(A_{vw}-\frac{k_v k_w}{2m})\delta_{vw}$$
+
+<h2 id="另一种定义"><a href="#另一种定义" class="headerlink" title="另一种定义"></a>另一种定义</h2><p>假设整个图G可以被划为c个社区，定义$e_{ij}$表示链路连接社区i和社区j的概率，那么在社区内的链路概率为：</p>
+
+$$\sum_{vw}{\frac{A_{vw}\delta_{vw}}{2m}}=\sum_i^c{e_{ii}}$$
+
+<p>定义<span>$a_i=\sum_j{e_{ij}}$</span><!-- Has MathJax -->表示链路的任一节点落在社区i的概率。那么在随机情况下，社区i和社区j之间存在的链路概率为$a_i a_j$。${a_i}^2$表示在随机情形下，链路落在社区i中的概率。</p>
+<p>这样模块度可以表示为：</p>
+
+$$Q=\sum_i^c(e_{ii}-a_{ii}^2)$$
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;作用&quot;&gt;&lt;a href=&quot;#作用&quot; class=&quot;headerlink&quot; title=&quot;作用&quot;&gt;&lt;/a&gt;作用&lt;/h2&gt;&lt;p&gt;随着人们对网络的深入研究，在现实中的很多场景中，网络会具有一定的社区结构，比如社交网络、计算机网络。根据网络的结构，网络可以划分为不同的社区
+    
+    </summary>
+    
+    
+      <category term="算法" scheme="http://yoursite.com/tags/%E7%AE%97%E6%B3%95/"/>
+    
+      <category term="图论" scheme="http://yoursite.com/tags/%E5%9B%BE%E8%AE%BA/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>单纯形法</title>
+    <link href="http://yoursite.com/2014/12/06/%E5%8D%95%E7%BA%AF%E5%BD%A2%E6%B3%95/"/>
+    <id>http://yoursite.com/2014/12/06/单纯形法/</id>
+    <published>2014-12-06T14:10:52.000Z</published>
+    <updated>2017-05-18T06:55:03.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="作用"><a href="#作用" class="headerlink" title="作用"></a>作用</h2><p>单纯形法是解决线性规划问题的一个有效的算法。线性规划就是在一组线性约束条件下，求解目标函数最优解的问题。</p>
+<h2 id="线性规划的一般形式"><a href="#线性规划的一般形式" class="headerlink" title="线性规划的一般形式"></a>线性规划的一般形式</h2><p>在约束条件下，寻找目标函数z的最大值。</p>
+
+$$\begin{array}{l} 
+	\max z={x_1}+{x_2}\\
+	s.t.\left\{
+	\begin{array}{*{20}{c}} 
+		2{x_1}+{x_2}\le 12\\ 
+		{x_1}+2{x_2}\le 9\\ 
+		{x_1},{x_2}\ge 0
+	\end{array}\right. 
+\end{array}$$
+
+<h2 id="线性规划的可行域"><a href="#线性规划的可行域" class="headerlink" title="线性规划的可行域"></a>线性规划的可行域</h2><p>满足线性规划问题约束条件的所有点组成的集合就是线性规划的可行域。若可行域有界（以下主要考虑有界可行域），线性规划问题的目标函数最优解必然在可行域的顶点上达到最优。</p>
+<p>单纯形法就是通过设置不同的基向量，经过矩阵的线性变换，求得基可行解（可行域顶点），并判断该解是否最优，否则继续设置另一组基向量，重复执行以上步骤，直到找到最优解。所以，单纯形法的求解过程是一个循环迭代的过程。</p>
+<p><img src="56db5bdc98807a579132eda03c006.png" alt=""></p>
+<h2 id="线性规划的标准形式"><a href="#线性规划的标准形式" class="headerlink" title="线性规划的标准形式"></a>线性规划的标准形式</h2><p>在说明单纯形法的原理之前，需要明白线性规划的标准形式。因为单纯形算法是通过线性规划的标准形来求解的。一般，规定线性规划的标准形式为：</p>
+
+$$\begin{array}{l} 
+\max z = \sum\limits_{j = 1}^n {{c_j}{x_j}} \\ 
+s.t.\left\{ 
+{\begin{array}{*{20}{c}} 
+{\sum\limits_{j = 1}^n {{a_{ij}}{x_j} = {b_j}, i = 1,2,...,m} }\\ 
+{x_j \ge 0, j = 1,2,...,n} \end{array}} \right. \end{array}$$
+
+<p>写成矩阵形式：<br>
+$$\begin{array}{l} 
+\max z = CX\\ 
+AX = b\\ 
+X \ge 0\\ 
+A = \left[ 
+{\begin{array}{*{20}{c}} 
+{{a_{11}}}&{{a_{12}}}& \cdots &{{a_{1n}}}\\ 
+\vdots & \vdots & \ddots & \vdots \\ 
+{{a_{m1}}}&{{a_{m2}}}& \cdots &{{a_{mn}}} 
+\end{array}} \right] \end{array}$$
+</p>
+<p>标准形的形式为：</p>
+<ul>
+<li>目标函数要求max</li>
+<li>约束条件均为等式</li>
+<li>决策变量为非负约束</li>
+</ul>
+<p>普通线性规划化为标准形：</p>
+<p>1）若目标函数为最小化，可以通过取负，求最大化<br>2）约束不等式为小于等于不等式，可以在左端加入非负松弛变量，转变为等式，比如：<br>
+$${x_1}+2{x_2} \le 9 \Rightarrow \left\{ {\begin{array}{*{20}{c}} {{x_1}+2{x_2}+{x_3} = 9}\\ {{x_3} \ge 0} \end{array}} \right.$$
+</p>
+<p>同理，约束不等式为大于等于不等式时，可以在左端减去一个非负松弛变量，变为等式。</p>
+<p>3）若存在取值无约束的变量，可转变为两个非负变量的差，比如：<br>
+$$- \infty \le {x_k} \le + \infty \Rightarrow \left\{ {\begin{array}{*{20}{c}} {{x_k} = {x_m} - {x_n}}\\ {{x_m},{x_n} \ge 0} \end{array}} \right.$$
+</p>
+<p>本文最开始的线性规划问题转化为标准形为：<br>
+$$\begin{array}{l} \max z = {x_1} + {x_2}\\ 
+s.t.\left\{ {\begin{array}{*{20}{c}} {2{x_1}+{x_2}+{x_3} = 12}\\ 
+{{x_1}+2{x_2}+{x_4} = 9}\\ 
+{{x_1},{x_2},{x_3},{x_4} \ge 0} \end{array}} \right. \end{array}$$
+</p>
+<h2 id="单纯形法"><a href="#单纯形法" class="headerlink" title="单纯形法"></a>单纯形法</h2><h3 id="几何意义"><a href="#几何意义" class="headerlink" title="几何意义"></a>几何意义</h3><p>在标准形中，有m个约束条件（不包括非负约束），n个决策变量，且（n&gt;=m）。首先，选取m个基变量$x_j’(j = 1,2,…,m)$ ，基变量对应约束系数矩阵的列向量线性无关。通过矩阵的线性变换，基变量可由非基变量表示：</p>
+
+$$x_i'=C_i+\sum_{j=m+1}^{n}m_{ij}x_j'(i=1,2,...,m)$$
+
+<p>如果令非基变量等于0，可求得基变量的值 ：<br>
+$$x_i'=C_i$$
+<br>如果为可行解的话，Ci大于0。那么它的几何意义是什么呢？还是通过上述具体的线性规划问题来说明。</p>
+
+$$\begin{array}{l} \max z = {x_1}  {x_2}\\
+s.t.\left\{ {\begin{array}{*{20}{c}} {2{x_1}  {x_2}  {x_3} = 12}\\ 
+{{x_1}  2{x_2}  {x_4} = 9}\\ 
+{{x_1},{x_2},{x_3},{x_4} \ge 0} \end{array}} \right. \end{array}$$
+
+<p>如果选择x2、x3为基变量，那么令x1、x4等于0，可以去求解基变量x2、x3的值。对系数矩阵做行变换，如下所示，x2=9/2，x3=15/2</p>
+
+$\left[\begin{array}{*{20}{c}} 
+\rm{X} & {x_1} & {x_2} & {x_3} & {x_4} & b\\ 
+{}     & 2     & 1     & 1     & 0     & {12}\\ 
+{}     & 1     & 2     &   0   & 1     & 9\\ 
+\rm{C} & 1     & 1     & 0     & 0     & z 
+\end{array} \right]
+\to
+\left[\begin{array}{*{20}{c}} 
+\rm{X} & {x_1} & {x_2} & {x_3} & {x_4} & b\\ 
+{} & \textstyle{3 \over 2} & 0 & 1 & -\textstyle{1 \over 2} & \textstyle{{15} \over 2}\\ 
+{} & \textstyle{1 \over 2} & 1 & 0 & \textstyle{1 \over 2} & \textstyle{9 \over 2}\\ 
+\rm{C} & \textstyle{1 \over 2} & 0 & 0 & -\textstyle{1 \over 2} & {z - \textstyle{9 \over 2}} 
+\end{array} \right]$
+
+<p> X1=0表示可行解在x轴上；X4=0表示可行解在x1+2x2=9的直线上。那么，求得的可行解即表示这两条直线的交点，也是可行域的顶点，如图所示：</p>
+<p><img src="1967a66403349e0e47c00614c9dd0.png" alt=""></p>
+<p>所以，通过选择不同的基变量，可以获得不同的可行域的顶点。</p>
+<h3 id="如何判断最优"><a href="#如何判断最优" class="headerlink" title="如何判断最优"></a>如何判断最优</h3><p>如前所述，基变量可由非基变量表示：</p>
+
+$$x_i' = {C_i}  \sum\limits_{j = m  1}^n {{m_{ij}}x_j'} (i = 1,2,...,m)$$
+
+<p>目标函数z也可以完全由非基变量表示：</p>
+$$z = {z_0}  \sum\limits_{j = m  1}^n {{\sigma _j}x_j'}$$
+<p>当达到最优解时，所有的$\sigma_j$应小于等于0。当存在j,$\sigma_j$&gt;0时，当前解不是最优解，为什么？</p>
+<p>当前的目标函数值为z0，其中所有的非基变量值均取0。由之前分析可知，$x_j’$=0代表可行域的某个边界，是$x_j’$的最小值。如果可行解逐步离开这个边界，$x_j’$会变大，因为$\sigma_j$&gt;0，显然目标函数的取值也会变大，所以当前解不是最优解。我们需要寻找新的基变量。</p>
+<h3 id="如何选择新的基变量"><a href="#如何选择新的基变量" class="headerlink" title="如何选择新的基变量"></a>如何选择新的基变量</h3><p>如果存在多个$\sigma_j$&gt;0，选择最大的$\sigma_j$&gt;0对应的变量作为基变量，这表示目标函数随着$\sigma_j$的增加，增长的最快。</p>
+<h3 id="如何选择被替换的基变量"><a href="#如何选择被替换的基变量" class="headerlink" title="如何选择被替换的基变量"></a>如何选择被替换的基变量</h3><p>假如我们选择非基变量$x_s’$作为下一轮的基变量，那么被替换基变量$x_j’$在下一轮中作为非基变量，等于0。选择$x_j’$的原则：替换后应该尽量使$x_s’$值最大（因为上面已分析过，目标函数会随着$x_s’$的增大而增大）。<br>继续通过上面的例子来说明：</p>
+
+$$\left[ {\begin{array}{*{20}{c}} {\rm{X}}&{{x_1}}&{{x_2}}&{{x_3}}&{{x_4}}&b\\ {}&2&1&1&0&{12}\\ {}&1&2&0&1&9\\ {\rm{C}}&1&1&0&0&z \end{array}} \right] \to \left[ {\begin{array}{*{20}{c}} {\rm{X}}&{{x_1}}&{{x_2}}&{{x_3}}&{{x_4}}&b\\ {}&{{\textstyle{3 \over 2}}}&0&1&{ - {\textstyle{1 \over 2}}}&{{\textstyle{{15} \over 2}}}\\ {}&{{\textstyle{1 \over 2}}}&1&0&{{\textstyle{1 \over 2}}}&{{\textstyle{9 \over 2}}}\\ {\rm{C}}&{{\textstyle{1 \over 2}}}&0&0&{ - {\textstyle{1 \over 2}}}&{z - {\textstyle{9 \over 2}}} \end{array}} \right]$$
+
+<p>从最后一行可以看到，x1的系数为1/2&gt;0，所以选x2、x3为基变量并没有是目标函数达到最优。下一轮选取x1作为基变量，替换x2、x3中的某个变量。</p>
+<p>第一行是符号<br>第二行：若x1替换x3作为基变量，x3=0时，x1=(15/2)/(3/2)=5<br>第三行：若x1替换x2作为基变量，x2=0时，x1=(9/2)/(1/2)=9<br>显然，应该把x2作为非基变量。</p>
+<h3 id="终止条件"><a href="#终止条件" class="headerlink" title="终止条件"></a>终止条件</h3><p>当目标函数用非基变量的线性组合表示时，所有的系数均不大于0，则表示目标函数达到最优。</p>
+<p>如果，有一个非基变量的系数为0，其他的均小于0，表示目标函数的最优解有无穷多个。这是因为目标函数的梯度与某一边界正交，在这个边界上，目标函数的取值均相等，且为最优。</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;h2 id=&quot;作用&quot;&gt;&lt;a href=&quot;#作用&quot; class=&quot;headerlink&quot; title=&quot;作用&quot;&gt;&lt;/a&gt;作用&lt;/h2&gt;&lt;p&gt;单纯形法是解决线性规划问题的一个有效的算法。线性规划就是在一组线性约束条件下，求解目标函数最优解的问题。&lt;/p&gt;
+&lt;h2 id=&quot;线性规划的
+    
+    </summary>
+    
+    
+      <category term="算法" scheme="http://yoursite.com/tags/%E7%AE%97%E6%B3%95/"/>
+    
+      <category term="最优化" scheme="http://yoursite.com/tags/%E6%9C%80%E4%BC%98%E5%8C%96/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>获取当前程序路径Linux</title>
+    <link href="http://yoursite.com/2014/12/06/%E8%8E%B7%E5%8F%96%E5%BD%93%E5%89%8D%E7%A8%8B%E5%BA%8F%E8%B7%AF%E5%BE%84Linux/"/>
+    <id>http://yoursite.com/2014/12/06/获取当前程序路径Linux/</id>
+    <published>2014-12-06T14:09:38.000Z</published>
+    <updated>2017-05-18T05:31:27.000Z</updated>
+    
+    <content type="html"><![CDATA[<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line">char * getCurrProPath() &#123;</div><div class="line">	char * buf = new char[1024];</div><div class="line">        int n;</div><div class="line">        n = readlink(&quot;/proc/self/exe&quot;, buf, 1024);</div><div class="line">        if (n &lt; 0 || n &gt; 1024)&#123;</div><div class="line">                printf(&quot;Cannot get current pro path!\n&quot;);</div><div class="line">                delete buf;</div><div class="line">                return NULL;</div><div class="line">        &#125;   </div><div class="line">    </div><div class="line">        for (int i = n; i &gt;=0; --i) &#123;</div><div class="line">                if (buf[i] == &apos;\&apos;) &#123;</div><div class="line">                        buf[i] = &apos;\0&apos;;</div><div class="line">                        break;</div><div class="line">                &#125;   </div><div class="line">        &#125;   </div><div class="line">        return buf;</div><div class="line">&#125;</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;figure class=&quot;highlight plain&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;div class=&quot;line&quot;&gt;1&lt;/div&gt;&lt;div class=&quot;line&quot;&gt;2&lt;/div&gt;&lt;div class=&quot;line&quot;&gt;3&lt;/di
+    
+    </summary>
+    
+    
+      <category term="linux" scheme="http://yoursite.com/tags/linux/"/>
+    
+      <category term="c" scheme="http://yoursite.com/tags/c/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>vsftpd用户修改密码</title>
+    <link href="http://yoursite.com/2014/12/06/vsftpd%E7%94%A8%E6%88%B7%E4%BF%AE%E6%94%B9%E5%AF%86%E7%A0%81/"/>
+    <id>http://yoursite.com/2014/12/06/vsftpd用户修改密码/</id>
+    <published>2014-12-06T14:08:11.000Z</published>
+    <updated>2017-05-18T05:30:20.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>创建ftp系统用户，防止用户通过ssh登陆，可以加上选项<code>-s /sbin/nologin</code></p>
+<p>如果想让用户自己修改密码，可以这样添加用户：</p>
+<pre><code>useradd -g ftpusers -d /home/XXX -s /user/bin/passwd test
+</code></pre><p>这样test用户通过ssh登陆后就显示修改密码的界面。</p>
+<p>可以通过python程序的去添加用户，python的crypt模块实现对Unix密码的加密计算</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">import os, crypt</div><div class="line">pwd = crypt.crypt(&quot;123456&quot;, &quot;ab&quot;)</div><div class="line">os.system(&quot;useradd -g %s -d %s -s /user/bin/passwd %s -p %s&quot; % (groupName, homePath, userName, pwd))</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;创建ftp系统用户，防止用户通过ssh登陆，可以加上选项&lt;code&gt;-s /sbin/nologin&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;如果想让用户自己修改密码，可以这样添加用户：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;useradd -g ftpusers -d /home/XXX -
+    
+    </summary>
+    
+    
+      <category term="python" scheme="http://yoursite.com/tags/python/"/>
+    
+      <category term="linux" scheme="http://yoursite.com/tags/linux/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>subprocess调用外部命令屏蔽输出</title>
+    <link href="http://yoursite.com/2014/12/06/subprocess%E8%B0%83%E7%94%A8%E5%A4%96%E9%83%A8%E5%91%BD%E4%BB%A4%E5%B1%8F%E8%94%BD%E8%BE%93%E5%87%BA/"/>
+    <id>http://yoursite.com/2014/12/06/subprocess调用外部命令屏蔽输出/</id>
+    <published>2014-12-06T14:05:13.000Z</published>
+    <updated>2017-05-18T05:30:30.000Z</updated>
+    
+    <content type="html"><![CDATA[<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">import os, subprocess</div><div class="line">devNull = open(os.devnull, &apos;w&apos;)</div><div class="line">p = subprocess.Popen(args, stdout = devNull)</div></pre></td></tr></table></figure>
+<p>args为要执行的命令</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;figure class=&quot;highlight plain&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;div class=&quot;line&quot;&gt;1&lt;/div&gt;&lt;div class=&quot;line&quot;&gt;2&lt;/div&gt;&lt;div class=&quot;line&quot;&gt;3&lt;/di
+    
+    </summary>
+    
+    
+      <category term="python" scheme="http://yoursite.com/tags/python/"/>
+    
+  </entry>
+  
+</feed>

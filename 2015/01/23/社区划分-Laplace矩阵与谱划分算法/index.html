@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content="Live your dream and share your passion!"><title>社区划分-Laplace矩阵与谱划分算法 | Wayne's Blog</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/6.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.2/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.2/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">社区划分-Laplace矩阵与谱划分算法</h1><a id="logo" href="/.">Wayne's Blog</a><p class="description"></p></div><div id="nav-menu"><a href="/." class="current"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">社区划分-Laplace矩阵与谱划分算法</h1><div class="post-meta">Jan 23, 2015<script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> 阅读</span></span></div><div class="post-content"><h2 id="社区划分"><a href="#社区划分" class="headerlink" title="社区划分"></a>社区划分</h2><p>实际的网络可能有若干个社区组成，社区内部的节点之间连接紧密，但社区之间的连接却比较稀疏。如下图所示，相同颜色的节点连接紧密，不同颜色的节点连接稀疏。同一种颜色的节点可以划分到同一个分区中。</p>
+<p><img src="8c10b6330d2547da8e30c359ce6df.png" alt=""></p>
+<h2 id="Laplace矩阵"><a href="#Laplace矩阵" class="headerlink" title="Laplace矩阵"></a>Laplace矩阵</h2><p>###定义<br>对于一个简单图$G$，它可以用Laplace矩阵$L=(l_{ij})_{n\times n}$来表示（$n$为$G$中节点数）。它的定义如下：</p>
+
+$l_{ij}=\left\{
+\begin{array}{ll}
+deg(v_i) & \textrm{if $i=j$}\\
+-1       & \textrm{if $v_i$ connect to $v_j$}\\
+0        & \textrm{otherwise}
+\end{array}\right.$
+
+<p>也就是说，$L$是一个$n\times n$的矩阵，$n$为图$G$的节点数。对角线上的元素$l_{ii}$的值为节点$v_i$的度。其他位置的元素，如果节点$v_i$与节点$v_j$相连（$i\neq j$），则值为$-1$，否则值为$0$。</p>
+<p>那么矩阵$L$可以表示为：$L=D-A$。矩阵$D$是图$G$的度矩阵，对角线上的元素表示各节点的度，其他元素为$0$。矩阵$A$表示图$G$的邻接矩阵。</p>
+<h3 id="性质"><a href="#性质" class="headerlink" title="性质"></a>性质</h3><ol>
+<li>$L$为实对称矩阵</li>
+<li>对$L$的每行或者每列求和都等于0</li>
+<li>矩阵$L$有一个特征值为0，对应的特征向量为${1,1,\dots ,1}$。（因为$L\cdot\{1,1,\dots ,1\}=0$）</li>
+<li>矩阵$L$的其他特征值均大于$0$。</li>
+</ol>
+<h2 id="谱划分算法"><a href="#谱划分算法" class="headerlink" title="谱划分算法"></a>谱划分算法</h2><p>谱划分算法是利用图的Laplace矩阵的特征值和特征向量对图实现划分的一种算法。<br>从线性空间的角度来理解，矩阵的特征向量可以理解为线性空间中相互正交的“基”（三维空间的三个维度），对应的特征值表示矩阵在各个基上的投影长度，特征值和特征向量唯一地确定了矩阵在线性空间中的位置。</p>
+<h3 id="划分思想"><a href="#划分思想" class="headerlink" title="划分思想"></a>划分思想</h3><p>假设图$G$由完全独立的两个社区组成，也就是说图$G$由两部分组成。那么它的Laplace矩阵经过行列的交换，可以写成一个分块对角阵。主对角线上的两个对角块矩阵正好分别是两个社区自身的Laplace矩阵。</p>
+<p><img src="549f3348fe0162e0eec7c0b74dac2.png" alt=""></p>
+<p>以上图的图$G$为例，它包含两个独立的社区。其Laplace矩阵为：</p>
+
+$L=\left( \begin{array}{cccccc|ccccc}
+ 2 & -1 & -1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+-1 & 5 & -1 & -1 & -1 & -1 & 0 & 0 & 0 & 0 & 0 \\
+-1 &-1 & 5 &-1 &-1 &-1 & 0 & 0 & 0 & 0 & 0 \\
+ 0 & -1 &-1 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+0 &-1 &-1 & 0 & 2 & 0 & 0 & 0 & 0 & 0 & 0\\
+0 &-1 &-1 & 0 & 0 & 2 & 0 & 0 & 0 & 0 & 0\\
+\hline
+ 0 & 0 & 0 & 0 & 0 & 0 & 4 &-1 &-1 &-1 &-1\\
+ 0 & 0 & 0 & 0 & 0 & 0 &-1 & 2 & 0 & 0 &-1\\
+  0 & 0 & 0 & 0 & 0 & 0 &-1 & 0 & 1 & 0 & 0\\
+ 0 & 0 & 0 & 0 & 0 & 0 &-1 & 0 & 0 & 2 &-1\\
+ 0 & 0 & 0 & 0 & 0 & 0 &-1 &-1 & 0 &-1 & 3\\
+\end{array} \right)$
+
+<p>求解矩阵的特征值和特征向量。如下式所示，特征值用$E$表示，特征向量矩阵用$V$表示：</p>
+
+$\left( \begin{array}{c}
+E\\
+\hline
+V\\
+\end{array} \right)=\left( \begin{array}{cccccc|ccccc}
+-0. & 2. & 6. & 6. & 2. & 2. & 5. & 0. & 4. & 2. & 1.\\
+\hline
+-0.408 & -0.866 & -0.289 & -0.144 & -0. & -0. & 0. & 0. & 0. & 0. & 0.\\
+ -0.408 & -0. &  0.577 & 0.901 & 0. &    0. &    0.  &   0. &    0. &    0. &    0.\\
+ -0.408 & -0. &    0.577 & -0.324 & -0. &   -0. &    0. &    0. &    0. &    0. &    0.\\
+ -0.408 & 0.289 &-0.289 &-0.144 &-0.  &  -0.73 &  0.  &   0.  &   0. &    0.  &   0.\\
+ -0.408 & 0.289 &-0.289 &-0.144 &-0.707 & 0.049 & 0.  &   0.  &   0. &    0.  &   0.\\
+ -0.408 &  0.289 & -0.289 & -0.144 & 0.707 & 0.681 & 0. &    0.  &   0. &    0. &    0.\\
+  0. &    0. &    0.  &   0.  &   0.  &   0.  &   0.894 & -0.447 & -0.  &   0. &    0.\\
+  0.  &   0.  &   0.  &   0.   &  0.  &   0.    &-0.224 &-0.447 &-0.408 & 0.707 &-0.289\\
+  0.  &   0.  &   0.  &   0.   &  0.  &   0.  &  -0.224 &-0.447 &-0.    &-0.   &  0.866\\
+  0.  &   0.  &   0.  &   0.   &  0.  &   0.  &  -0.224 &-0.447 &-0.408 &-0.707 &-0.289\\
+  0.  &   0.  &   0.  &   0.  &   0.  &   0.  &  -0.224 &-0.447 & 0.816 & 0. &   -0.289\\
+\end{array} \right)$
+
+<p>特征向量矩阵也是分块的形式，子块分别对应于每个社区的特征向量矩阵。此时，特征值0对应的特征向量有两个，分别对应于两个社区。所以Laplace矩阵中，特征值0对应的特征向量的个数，表示图$G$非联通分区的个数，对应于我们例子中的两个独立的社区。</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://yoursite.com/2015/01/23/社区划分-Laplace矩阵与谱划分算法/" data-id="cj2v7rbvk000racx4t1tsq0jg" class="article-share-link">分享</a><div class="tags"><a href="/tags/算法/">算法</a><a href="/tags/图论/">图论</a></div><div class="post-nav"><a href="/2015/03/12/译-管理堆空间：使用JVMTI循环类实例/" class="pre">[译]管理堆空间：使用JVMTI循环类实例</a><a href="/2015/01/14/ServiceLoader的使用/" class="next">ServiceLoader的使用</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" class="search-form"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="http://yoursite.com"/></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/python/" style="font-size: 15px;">python</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/floodlight/" style="font-size: 15px;">floodlight</a> <a href="/tags/leetcode/" style="font-size: 15px;">leetcode</a> <a href="/tags/c/" style="font-size: 15px;">c++</a> <a href="/tags/算法/" style="font-size: 15px;">算法</a> <a href="/tags/图论/" style="font-size: 15px;">图论</a> <a href="/tags/git/" style="font-size: 15px;">git</a> <a href="/tags/sdn/" style="font-size: 15px;">sdn</a> <a href="/tags/os/" style="font-size: 15px;">os</a> <a href="/tags/linux/" style="font-size: 15px;">linux</a> <a href="/tags/反射/" style="font-size: 15px;">反射</a> <a href="/tags/json/" style="font-size: 15px;">json</a> <a href="/tags/最优化/" style="font-size: 15px;">最优化</a> <a href="/tags/c/" style="font-size: 15px;">c</a> <a href="/tags/翻译/" style="font-size: 15px;">翻译</a> <a href="/tags/jvm/" style="font-size: 15px;">jvm</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/05/18/hello-world/">Hello World</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/08/20/ucore源码分析：bootloader/">ucore源码分析：bootloader</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/08/13/基于SDN的简单load-balancer/">基于SDN的简单load balancer</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/09/git使用/">git使用</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/06/09/python监控网卡流量/">python监控网卡流量</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/03/19/LeetCode-Median-of-Two-Sorted-Arrays/">[LeetCode]Median of Two Sorted Arrays</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/03/12/译-管理堆空间：使用JVMTI循环类实例/">[译]管理堆空间：使用JVMTI循环类实例</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/01/23/社区划分-Laplace矩阵与谱划分算法/">社区划分-Laplace矩阵与谱划分算法</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/01/14/ServiceLoader的使用/">ServiceLoader的使用</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/01/13/Floodlight源码分析（1）/">Floodlight源码分析（1）</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2017 <a href="/." rel="nofollow">Wayne's Blog.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a>Theme - <a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> maupassant.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.0.47/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.0.47/jquery.fancybox.min.css"><script type="text/x-mathjax-config">MathJax.Hub.Config({
+  tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+  });
+</script><script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML" async></script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
