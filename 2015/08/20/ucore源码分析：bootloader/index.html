@@ -96,15 +96,15 @@
 <meta name="keywords" content="os">
 <meta property="og:type" content="article">
 <meta property="og:title" content="ucore源码分析：bootloader">
-<meta property="og:url" content="http://roughtale.info/2015/08/20/ucore源码分析：bootloader/index.html">
+<meta property="og:url" content="http://wayne508.github.io/2015/08/20/ucore源码分析：bootloader/index.html">
 <meta property="og:site_name" content="Wayne&#39;s Blog">
 <meta property="og:description" content="1 总述bootloader的程序存放在硬盘的第一个扇区（512B）。BIOS程序会将bootloader加载到内存0x7c00处，并跳转到这里执行。 bootloader的主要作用：  打开A20地址线，使CPU进入32位实模式； 探测物理内存大小； 设置CR0，进入32位保护模式； 加载内核镜像，把控制权交给内核。  2 准备 进入bootloader后，为了后向兼容，此时的CPU是16位模式">
-<meta property="og:image" content="http://roughtale.info/2015/08/20/ucore源码分析：bootloader/a38fed2f8c0df5e4cf3b9e6186471.JPG">
+<meta property="og:image" content="http://wayne508.github.io/2015/08/20/ucore源码分析：bootloader/a38fed2f8c0df5e4cf3b9e6186471.JPG">
 <meta property="og:updated_time" content="2017-05-18T08:48:25.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="ucore源码分析：bootloader">
 <meta name="twitter:description" content="1 总述bootloader的程序存放在硬盘的第一个扇区（512B）。BIOS程序会将bootloader加载到内存0x7c00处，并跳转到这里执行。 bootloader的主要作用：  打开A20地址线，使CPU进入32位实模式； 探测物理内存大小； 设置CR0，进入32位保护模式； 加载内核镜像，把控制权交给内核。  2 准备 进入bootloader后，为了后向兼容，此时的CPU是16位模式">
-<meta name="twitter:image" content="http://roughtale.info/2015/08/20/ucore源码分析：bootloader/a38fed2f8c0df5e4cf3b9e6186471.JPG">
+<meta name="twitter:image" content="http://wayne508.github.io/2015/08/20/ucore源码分析：bootloader/a38fed2f8c0df5e4cf3b9e6186471.JPG">
 
 
 
@@ -132,7 +132,7 @@
 
 
 
-  <link rel="canonical" href="http://roughtale.info/2015/08/20/ucore源码分析：bootloader/"/>
+  <link rel="canonical" href="http://wayne508.github.io/2015/08/20/ucore源码分析：bootloader/"/>
 
 
 
@@ -312,7 +312,7 @@
   
 
   <article class="post post-type-normal " itemscope itemtype="http://schema.org/Article">
-    <link itemprop="mainEntityOfPage" href="http://roughtale.info/2015/08/20/ucore源码分析：bootloader/">
+    <link itemprop="mainEntityOfPage" href="http://wayne508.github.io/2015/08/20/ucore源码分析：bootloader/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="Wayne">
@@ -759,7 +759,7 @@
         <div class="copyright" >
   
   &copy; 
-  <span itemprop="copyrightYear">2017</span>
+  <span itemprop="copyrightYear">2021</span>
   <span class="with-love">
     <i class="fa fa-heart"></i>
   </span>
@@ -906,7 +906,7 @@
     
       <script type="text/javascript">
         var disqus_config = function () {
-          this.page.url = 'http://roughtale.info/2015/08/20/ucore源码分析：bootloader/';
+          this.page.url = 'http://wayne508.github.io/2015/08/20/ucore源码分析：bootloader/';
           this.page.identifier = '2015/08/20/ucore源码分析：bootloader/';
           this.page.title = 'ucore源码分析：bootloader';
         };
